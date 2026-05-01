@@ -20,6 +20,12 @@ const EXIT_BOTTOM = 3;
 const EXIT_LOWER_LEFT = 4;
 const EXIT_LOWER_RIGHT = 5;
 const EXIT_FLYBY = 6;
+const HOLD_NONE = 0;
+const HOLD_GRABBED = 1;
+const HOLD_RELEASING = 2;
+const GRAB_MIN_Z = 4;
+const GRAB_MAX_Z = 8;
+const RELEASE_MOMENTUM_DURATION = 0.58;
 
 const CRANE_PALETTE = [
   { h: 0.03, s: 0.36, l: 0.82 },
@@ -514,6 +520,30 @@ function resetCrane(data, index, startSpread, reducedMotion) {
   data.lane[index] = lane;
   data.wakeCue[index] = 0;
   data.wakeRoll[index] = 0;
+  data.held[index] = HOLD_NONE;
+  data.grabPointerId[index] = -1;
+  data.grabProgress[index] = 0;
+  data.grabReleaseProgress[index] = 0;
+  data.grabAge[index] = 0;
+  data.grabStartX[index] = data.x[index];
+  data.grabStartY[index] = data.y[index];
+  data.grabStartZ[index] = data.z[index];
+  data.grabX[index] = data.x[index];
+  data.grabY[index] = data.y[index];
+  data.grabZ[index] = data.z[index];
+  data.grabPrevX[index] = data.x[index];
+  data.grabPrevY[index] = data.y[index];
+  data.grabPrevZ[index] = data.z[index];
+  data.grabVelocityX[index] = 0;
+  data.grabVelocityY[index] = 0;
+  data.grabVelocityZ[index] = 0;
+  data.grabOffsetX[index] = 0;
+  data.grabOffsetY[index] = 0;
+  data.grabOffsetZ[index] = 0;
+  data.grabOffsetReady[index] = 0;
+  data.grabPhase[index] = random(0, TAU);
+  data.grabIntensity[index] = 0;
+  data.grabBank[index] = 0;
   data.exitState[index] = 0;
   data.exitSide[index] = EXIT_RIGHT;
   data.exitX[index] = 0;
@@ -562,6 +592,30 @@ function createCraneData(count, reducedMotion) {
     lane: new Float32Array(count),
     wakeCue: new Float32Array(count),
     wakeRoll: new Float32Array(count),
+    held: new Uint8Array(count),
+    grabPointerId: new Int32Array(count),
+    grabProgress: new Float32Array(count),
+    grabReleaseProgress: new Float32Array(count),
+    grabAge: new Float32Array(count),
+    grabStartX: new Float32Array(count),
+    grabStartY: new Float32Array(count),
+    grabStartZ: new Float32Array(count),
+    grabX: new Float32Array(count),
+    grabY: new Float32Array(count),
+    grabZ: new Float32Array(count),
+    grabPrevX: new Float32Array(count),
+    grabPrevY: new Float32Array(count),
+    grabPrevZ: new Float32Array(count),
+    grabVelocityX: new Float32Array(count),
+    grabVelocityY: new Float32Array(count),
+    grabVelocityZ: new Float32Array(count),
+    grabOffsetX: new Float32Array(count),
+    grabOffsetY: new Float32Array(count),
+    grabOffsetZ: new Float32Array(count),
+    grabOffsetReady: new Uint8Array(count),
+    grabPhase: new Float32Array(count),
+    grabIntensity: new Float32Array(count),
+    grabBank: new Float32Array(count),
     exitState: new Uint8Array(count),
     exitSide: new Int8Array(count),
     exitX: new Float32Array(count),
@@ -664,6 +718,222 @@ function CraneField({ count, reducedMotion, interactionRef }) {
     [baseObject, finalMatrix, partObject],
   );
 
+  const setGrabPointerFromEvent = useCallback(
+    (event) => {
+      const interaction = interactionRef.current;
+      let pointerX = event.pointer?.x;
+      let pointerY = event.pointer?.y;
+
+      if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) {
+        const sourceEvent = event.sourceEvent ?? event.nativeEvent ?? event;
+        const target = sourceEvent.currentTarget ?? sourceEvent.target;
+        const rect = target?.getBoundingClientRect?.();
+        if (!rect || !Number.isFinite(sourceEvent.clientX) || !Number.isFinite(sourceEvent.clientY)) {
+          return false;
+        }
+        pointerX = ((sourceEvent.clientX - rect.left) / rect.width) * 2 - 1;
+        pointerY = -(((sourceEvent.clientY - rect.top) / rect.height) * 2 - 1);
+      }
+
+      const now = performance.now() / 1000;
+      const hasRecentMove = now - interaction.lastMove < 0.18;
+      if (hasRecentMove) {
+        const dt = clamp(now - interaction.lastMove, 0.016, 0.12);
+        interaction.vx += ((pointerX - interaction.x) / dt - interaction.vx) * 0.36;
+        interaction.vy += ((pointerY - interaction.y) / dt - interaction.vy) * 0.36;
+      } else {
+        interaction.vx = 0;
+        interaction.vy = 0;
+      }
+
+      interaction.x = clamp(pointerX, -1.15, 1.15);
+      interaction.y = clamp(pointerY, -1.15, 1.15);
+      interaction.active = false;
+      interaction.lastMove = now;
+      return true;
+    },
+    [interactionRef],
+  );
+
+  const releasePointerCapture = useCallback((event) => {
+    const pointerId = event.pointerId;
+    if (!Number.isFinite(pointerId)) return;
+
+    try {
+      event.target?.releasePointerCapture?.(pointerId);
+    } catch {
+      // Some browsers release capture automatically on pointerup/cancel.
+    }
+  }, []);
+
+  const releaseGrabbedCrane = useCallback(
+    (index) => {
+      if (index < 0 || index >= count || data.held[index] !== HOLD_GRABBED) return;
+
+      const interaction = interactionRef.current;
+      data.held[index] = HOLD_RELEASING;
+      data.grabPointerId[index] = -1;
+      data.grabProgress[index] = Math.max(0.26, data.grabProgress[index]);
+      data.grabReleaseProgress[index] = 0;
+      data.grabAge[index] = 0;
+      data.grabStartX[index] = data.x[index];
+      data.grabStartY[index] = data.y[index];
+      data.grabStartZ[index] = data.z[index];
+      data.grabX[index] = data.x[index];
+      data.grabY[index] = data.y[index];
+      data.grabZ[index] = data.z[index];
+      data.grabPrevX[index] = data.x[index];
+      data.grabPrevY[index] = data.y[index];
+      data.grabPrevZ[index] = data.z[index];
+      data.grabOffsetReady[index] = 0;
+
+      const releaseScale = reducedMotion ? 0.32 : 0.42;
+      let releaseVx = data.grabVelocityX[index] * releaseScale + data.vx[index] * 0.32;
+      let releaseVy = data.grabVelocityY[index] * releaseScale + data.vy[index] * 0.32;
+      const lateralRelease = Math.hypot(releaseVx, releaseVy);
+      const releasePower = clamp01(lateralRelease / (reducedMotion ? 11 : 18));
+      const minForward = data.cruise[index] * (reducedMotion ? 0.46 : 0.58);
+      const forwardBoost =
+        data.cruise[index] * (reducedMotion ? 0.34 : 0.46) +
+        lateralRelease * (reducedMotion ? 0.035 : 0.07);
+      let releaseVz = Math.max(
+        data.vz[index] * 0.26 + data.grabVelocityZ[index] * 0.16 + forwardBoost,
+        minForward,
+      );
+      releaseVx = clamp(releaseVx, reducedMotion ? -11 : -18, reducedMotion ? 11 : 18);
+      releaseVy = clamp(releaseVy, reducedMotion ? -9 : -15, reducedMotion ? 9 : 15);
+      releaseVz = clamp(releaseVz, minForward, data.cruise[index] * (reducedMotion ? 1.2 : 1.65));
+
+      const releaseMax = reducedMotion ? 13.2 : 22;
+      const releaseSpeed = Math.hypot(releaseVx, releaseVy, releaseVz);
+      if (releaseSpeed > releaseMax) {
+        const scale = releaseMax / releaseSpeed;
+        releaseVx *= scale;
+        releaseVy *= scale;
+        releaseVz = Math.max(minForward, releaseVz * scale);
+      }
+
+      data.vx[index] = releaseVx;
+      data.vy[index] = releaseVy;
+      data.vz[index] = releaseVz;
+      data.grabVelocityX[index] = releaseVx;
+      data.grabVelocityY[index] = releaseVy;
+      data.grabVelocityZ[index] = releaseVz;
+      data.grabIntensity[index] = Math.max(data.grabIntensity[index], releasePower);
+      data.grabBank[index] = clamp(releaseVx * (reducedMotion ? 0.018 : 0.026), -0.42, 0.42);
+      data.exitState[index] = 0;
+      data.offscreenTime[index] = 0;
+
+      if (interaction.grabbedIndex === index) {
+        interaction.isGrabbing = false;
+        interaction.grabReleaseRequested = false;
+        interaction.grabbedIndex = -1;
+        interaction.grabbedPointerId = -1;
+      }
+    },
+    [count, data, interactionRef, reducedMotion],
+  );
+
+  const startGrabCrane = useCallback(
+    (index, event) => {
+      if (index < 0 || index >= count) return;
+
+      const interaction = interactionRef.current;
+      const previousIndex = interaction.grabbedIndex;
+      if (previousIndex >= 0 && previousIndex !== index) {
+        releaseGrabbedCrane(previousIndex);
+      }
+
+      const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : -1;
+      try {
+        event.target?.setPointerCapture?.(pointerId);
+      } catch {
+        // Pointer capture is best-effort for R3F/DOM event interop.
+      }
+
+      setGrabPointerFromEvent(event);
+
+      interaction.isGrabbing = true;
+      interaction.grabReleaseRequested = false;
+      interaction.grabbedIndex = index;
+      interaction.grabbedPointerId = pointerId;
+      interaction.active = false;
+      interaction.suppressBurstUntil = performance.now() / 1000 + 0.12;
+
+      data.held[index] = HOLD_GRABBED;
+      data.grabPointerId[index] = pointerId;
+      data.grabProgress[index] = Math.max(0.08, data.grabProgress[index]);
+      data.grabReleaseProgress[index] = 0;
+      data.grabAge[index] = 0;
+      data.grabStartX[index] = data.x[index];
+      data.grabStartY[index] = data.y[index];
+      data.grabStartZ[index] = data.z[index];
+      data.grabX[index] = data.x[index];
+      data.grabY[index] = data.y[index];
+      data.grabZ[index] = clamp(data.z[index] * 0.16 + 5.7, GRAB_MIN_Z, GRAB_MAX_Z);
+      data.grabPrevX[index] = data.x[index];
+      data.grabPrevY[index] = data.y[index];
+      data.grabPrevZ[index] = data.z[index];
+      data.grabVelocityX[index] = 0;
+      data.grabVelocityY[index] = 0;
+      data.grabVelocityZ[index] = 0;
+      data.grabOffsetX[index] = 0;
+      data.grabOffsetY[index] = 0;
+      data.grabOffsetZ[index] = 0;
+      data.grabOffsetReady[index] = 0;
+      data.grabPhase[index] = random(0, TAU);
+      data.grabIntensity[index] = 0;
+      data.grabBank[index] = 0;
+      data.vx[index] *= 0.3;
+      data.vy[index] *= 0.3;
+      data.vz[index] *= 0.18;
+      data.ax[index] = 0;
+      data.ay[index] = 0;
+      data.az[index] = 0;
+      data.wakeCue[index] = 0;
+      data.wakeRoll[index] = 0;
+      data.exitState[index] = 0;
+      data.exitAge[index] = 0;
+      data.offscreenTime[index] = 0;
+    },
+    [count, data, interactionRef, reducedMotion, releaseGrabbedCrane, setGrabPointerFromEvent],
+  );
+
+  const handleCranePointerDown = useCallback(
+    (event) => {
+      const instanceId = event.instanceId;
+      if (!Number.isInteger(instanceId)) return;
+      event.stopPropagation();
+      startGrabCrane(instanceId, event);
+    },
+    [startGrabCrane],
+  );
+
+  const handleCranePointerMove = useCallback(
+    (event) => {
+      const interaction = interactionRef.current;
+      if (!interaction.isGrabbing) return;
+      if (interaction.grabbedPointerId >= 0 && event.pointerId !== interaction.grabbedPointerId) return;
+
+      event.stopPropagation();
+      setGrabPointerFromEvent(event);
+    },
+    [interactionRef, setGrabPointerFromEvent],
+  );
+
+  const handleCranePointerRelease = useCallback(
+    (event) => {
+      const interaction = interactionRef.current;
+      if (!interaction.isGrabbing && !interaction.grabReleaseRequested) return;
+      if (interaction.grabbedPointerId >= 0 && event.pointerId !== interaction.grabbedPointerId) return;
+
+      event.stopPropagation();
+      releasePointerCapture(event);
+      releaseGrabbedCrane(interaction.grabbedIndex);
+    },
+    [interactionRef, releaseGrabbedCrane, releasePointerCapture],
+  );
+
   useFrame((state, delta) => {
     const meshes = meshesRef.current;
     if (meshes.length !== 5) return;
@@ -672,7 +942,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
     const now = performance.now() / 1000;
     const dt = Math.min(delta, reducedMotion ? 0.032 : 0.038);
     const interaction = interactionRef.current;
-    const pointerActive = interaction.active && now - interaction.lastMove < 3.2;
+    const pointerActive = !interaction.isGrabbing && interaction.active && now - interaction.lastMove < 3.2;
     const burstAge = now - interaction.burstTime;
     const aspect = state.size.width / state.size.height;
     const compactTitle = state.size.width < 720;
@@ -695,6 +965,152 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       const distanceToCamera = Math.max(0.01, state.camera.position.z - zi);
       const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
       const viewWidth = viewHeight * aspect;
+      let heldStatus = data.held[i];
+      if (
+        heldStatus === HOLD_GRABBED &&
+        (interaction.grabReleaseRequested ||
+          !interaction.isGrabbing ||
+          interaction.grabbedIndex !== i ||
+          (interaction.grabbedPointerId >= 0 && data.grabPointerId[i] !== interaction.grabbedPointerId))
+      ) {
+        releaseGrabbedCrane(i);
+        heldStatus = data.held[i];
+      }
+
+      if (heldStatus !== HOLD_NONE) {
+        data.exitState[i] = 0;
+        data.offscreenTime[i] = 0;
+        data.grabAge[i] += dt;
+
+        let grabTargetX = data.grabX[i];
+        let grabTargetY = data.grabY[i];
+        let grabTargetZ = data.grabZ[i];
+
+        if (heldStatus === HOLD_GRABBED) {
+          const grabZ = clamp(data.grabZ[i], GRAB_MIN_Z, GRAB_MAX_Z);
+          const grabDistance = Math.max(1, state.camera.position.z - grabZ);
+          const grabViewHeight = 2 * Math.tan(fov / 2) * grabDistance;
+          const grabViewWidth = grabViewHeight * aspect;
+          const pointerLead = reducedMotion ? 0.024 : 0.042;
+          const pointerX = clamp(interaction.x + interaction.vx * pointerLead, -1.08, 1.08);
+          const pointerY = clamp(interaction.y + interaction.vy * pointerLead, -1.08, 1.08);
+          const targetXNoOffset = state.camera.position.x + pointerX * grabViewWidth * 0.5;
+          const targetYNoOffset = state.camera.position.y + pointerY * grabViewHeight * 0.5;
+          const hoverScale = reducedMotion ? 0.28 : 1;
+          const grabEase = smoothstep(0, 1, data.grabProgress[i]);
+          const hoverA = Math.sin(elapsed * 0.82 + data.grabPhase[i]);
+          const hoverB = Math.cos(elapsed * 0.58 + data.grabPhase[i] * 0.73);
+          const firstGrabFrame = !data.grabOffsetReady[i];
+
+          if (firstGrabFrame) {
+            data.grabOffsetX[i] = clamp(xi - targetXNoOffset, -3.2, 3.2);
+            data.grabOffsetY[i] = clamp(yi - targetYNoOffset, -2.2, 2.2);
+            data.grabOffsetZ[i] = 0;
+            data.grabOffsetReady[i] = 1;
+          }
+
+          data.grabProgress[i] = Math.min(
+            1,
+            data.grabProgress[i] + dt / (reducedMotion ? 0.42 : 0.32),
+          );
+
+          const offsetFade = 1 - grabEase * 0.42;
+          grabTargetX = targetXNoOffset + data.grabOffsetX[i] * offsetFade + hoverB * 0.12 * hoverScale;
+          grabTargetY = targetYNoOffset + data.grabOffsetY[i] * offsetFade + hoverA * 0.1 * hoverScale;
+          grabTargetZ = grabZ + Math.sin(elapsed * 0.42 + data.grabPhase[i]) * 0.18 * hoverScale;
+          data.grabX[i] = grabTargetX;
+          data.grabY[i] = grabTargetY;
+          data.grabZ[i] = grabTargetZ;
+
+          if (firstGrabFrame) {
+            data.grabPrevX[i] = grabTargetX;
+            data.grabPrevY[i] = grabTargetY;
+            data.grabPrevZ[i] = grabTargetZ;
+            data.grabVelocityX[i] = 0;
+            data.grabVelocityY[i] = 0;
+            data.grabVelocityZ[i] = 0;
+          } else {
+            const invDt = 1 / Math.max(dt, 0.001);
+            const rawGrabVelocityX = clamp((grabTargetX - data.grabPrevX[i]) * invDt, -42, 42);
+            const rawGrabVelocityY = clamp((grabTargetY - data.grabPrevY[i]) * invDt, -34, 34);
+            const rawGrabVelocityZ = clamp((grabTargetZ - data.grabPrevZ[i]) * invDt, -8, 8);
+            const grabVelocityEase = 1 - Math.exp(-dt * (reducedMotion ? 5.6 : 8.8));
+            data.grabVelocityX[i] += (rawGrabVelocityX - data.grabVelocityX[i]) * grabVelocityEase;
+            data.grabVelocityY[i] += (rawGrabVelocityY - data.grabVelocityY[i]) * grabVelocityEase;
+            data.grabVelocityZ[i] += (rawGrabVelocityZ - data.grabVelocityZ[i]) * grabVelocityEase;
+            data.grabPrevX[i] = grabTargetX;
+            data.grabPrevY[i] = grabTargetY;
+            data.grabPrevZ[i] = grabTargetZ;
+          }
+
+          const pointerSpeed = Math.min(5.2, Math.hypot(interaction.vx, interaction.vy));
+          const grabGap = Math.min(9, Math.hypot(grabTargetX - xi, grabTargetY - yi));
+          const lateralSpeed = Math.min(12, Math.hypot(data.vx[i], data.vy[i]));
+          const rawDragIntensity = clamp01(
+            pointerSpeed * (reducedMotion ? 0.08 : 0.13) +
+              grabGap * (reducedMotion ? 0.035 : 0.055) +
+              lateralSpeed * (reducedMotion ? 0.018 : 0.026),
+          );
+          const intensityEase =
+            1 - Math.exp(-dt * (rawDragIntensity > data.grabIntensity[i] ? 8.4 : 4.2));
+          data.grabIntensity[i] += (rawDragIntensity - data.grabIntensity[i]) * intensityEase;
+
+          const bankFromPointer = clamp(interaction.vx * (reducedMotion ? 0.018 : 0.032), -0.34, 0.34);
+          const bankFromLag = clamp((grabTargetX - xi) * (reducedMotion ? 0.014 : 0.022), -0.28, 0.28);
+          const grabBankTarget = clamp(bankFromPointer + bankFromLag, -0.42, 0.42);
+          data.grabBank[i] +=
+            (grabBankTarget - data.grabBank[i]) * (1 - Math.exp(-dt * (reducedMotion ? 4.2 : 6.8)));
+
+          const spring = (reducedMotion ? 8.2 : 14.1) + grabEase * (reducedMotion ? 3.6 : 8.7);
+          const damping = (reducedMotion ? 7.1 : 9.7) + grabEase * (reducedMotion ? 1.8 : 3.4);
+          data.ax[i] = (grabTargetX - xi) * spring - data.vx[i] * damping;
+          data.ay[i] = (grabTargetY - yi) * spring - data.vy[i] * damping;
+          data.az[i] = (grabTargetZ - zi) * (spring * 0.82) - data.vz[i] * damping;
+        } else {
+          const releaseDuration = reducedMotion
+            ? RELEASE_MOMENTUM_DURATION * 1.28
+            : RELEASE_MOMENTUM_DURATION;
+          data.grabReleaseProgress[i] = Math.min(
+            1,
+            data.grabReleaseProgress[i] + dt / releaseDuration,
+          );
+          const releaseT = smoothstep(0, 1, data.grabReleaseProgress[i]);
+          data.grabProgress[i] = Math.max(
+            0,
+            data.grabProgress[i] - dt / (reducedMotion ? 0.92 : 0.68),
+          );
+          data.grabIntensity[i] += (0 - data.grabIntensity[i]) * (1 - Math.exp(-dt * 1.9));
+          data.grabBank[i] += (0 - data.grabBank[i]) * (1 - Math.exp(-dt * 2.4));
+
+          const airDrag = (reducedMotion ? 0.11 : 0.075) * (0.65 + releaseT * 0.45);
+          const forwardTarget =
+            data.cruise[i] * (0.72 + data.grabIntensity[i] * (reducedMotion ? 0.14 : 0.28));
+          data.ax[i] = -data.vx[i] * airDrag;
+          data.ay[i] =
+            -data.vy[i] * airDrag * 1.1 +
+            Math.sin(elapsed * 0.42 + data.grabPhase[i]) * data.grabIntensity[i] * (reducedMotion ? 0.025 : 0.055);
+          data.az[i] =
+            (forwardTarget - data.vz[i]) * (reducedMotion ? 0.1 : 0.15) -
+            Math.max(0, data.vz[i] - forwardTarget * 1.55) * 0.05;
+
+          if (
+            data.grabReleaseProgress[i] >= 1 ||
+            data.grabAge[i] > releaseDuration + (reducedMotion ? 0.2 : 0.12)
+          ) {
+            data.held[i] = HOLD_NONE;
+            data.grabAge[i] = 0;
+            data.grabPointerId[i] = -1;
+            data.grabOffsetReady[i] = 0;
+            data.exitState[i] = 0;
+            data.offscreenTime[i] = 0;
+            data.vz[i] = Math.max(data.vz[i], data.cruise[i] * 0.64);
+          }
+        }
+
+        data.wakeCue[i] = Math.sin(elapsed * 0.5 + data.grabPhase[i]) * 0.18;
+        continue;
+      }
+
       let exitState = data.exitState[i];
       if (exitState === 0 && zi >= EXIT_START_Z) {
         assignExitPath(data, i);
@@ -727,6 +1143,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
 
       for (let j = 0; j < count; j += 1) {
         if (i === j) continue;
+        if (data.held[j] !== HOLD_NONE) continue;
 
         const dx = xi - data.x[j];
         const dy = yi - data.y[j];
@@ -931,15 +1348,26 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       const layer = data.layer[i];
       const hero = layer === HERO_LAYER;
       const mid = layer === MID_LAYER;
+      const heldStatus = data.held[i];
       data.vx[i] += data.ax[i] * dt;
       data.vy[i] += data.ay[i] * dt;
       data.vz[i] += data.az[i] * dt;
 
       const capExitT =
-        data.exitState[i] > 0 ? smoothstep(EXIT_START_Z, CAMERA_Z - 1, data.z[i]) : 0;
+        heldStatus === HOLD_NONE && data.exitState[i] > 0
+          ? smoothstep(EXIT_START_Z, CAMERA_Z - 1, data.z[i])
+          : 0;
       const maxSpeed =
-        (hero ? 11.4 : mid ? 17.2 : 12.4) *
-        (1 + capExitT * (reducedMotion ? 0.12 : hero ? 0.42 : 0.28));
+        heldStatus === HOLD_GRABBED
+          ? reducedMotion
+            ? 24
+            : 38
+          : heldStatus === HOLD_RELEASING
+            ? reducedMotion
+              ? 13.2
+              : 22
+            : (hero ? 11.4 : mid ? 17.2 : 12.4) *
+              (1 + capExitT * (reducedMotion ? 0.12 : hero ? 0.42 : 0.28));
       const speed = Math.hypot(data.vx[i], data.vy[i], data.vz[i]);
       if (speed > maxSpeed) {
         const scale = maxSpeed / speed;
@@ -947,7 +1375,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         data.vy[i] *= scale;
         data.vz[i] *= scale;
       }
-      if (data.vz[i] < data.cruise[i] * 0.52) {
+      if (heldStatus === HOLD_NONE && data.vz[i] < data.cruise[i] * 0.52) {
         data.vz[i] += (data.cruise[i] * 0.52 - data.vz[i]) * 0.18;
       }
 
@@ -956,7 +1384,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       data.z[i] += data.vz[i] * dt;
 
       let shouldReset = false;
-      if (data.exitState[i] > 0) {
+      if (heldStatus === HOLD_NONE && data.exitState[i] > 0) {
         const exitDistance = state.camera.position.z - data.z[i];
         if (exitDistance > 0.08) {
           const exitViewHeight = 2 * Math.tan(fov / 2) * exitDistance;
@@ -977,7 +1405,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         } else {
           shouldReset = true;
         }
-      } else if (data.z[i] > EXIT_RESET_Z) {
+      } else if (heldStatus === HOLD_NONE && data.z[i] > EXIT_RESET_Z) {
         shouldReset = true;
       }
 
@@ -992,19 +1420,37 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       const pitch = -Math.atan2(data.vy[i], Math.max(0.001, Math.hypot(data.vx[i], data.vz[i])));
       const exitT = capExitT;
       const exitCommitVisual =
-        data.exitState[i] === 2 ? smoothstep(EXIT_COMMIT_Z, CAMERA_Z - 2, data.z[i]) : 0;
+        heldStatus === HOLD_NONE && data.exitState[i] === 2
+          ? smoothstep(EXIT_COMMIT_Z, CAMERA_Z - 2, data.z[i])
+          : 0;
+      const holdVisual =
+        heldStatus === HOLD_GRABBED
+          ? smoothstep(0, 1, data.grabProgress[i])
+          : heldStatus === HOLD_RELEASING
+            ? smoothstep(0, 1, data.grabProgress[i]) * 0.75
+            : 0;
+      const activeGrab = heldStatus === HOLD_GRABBED ? holdVisual : 0;
+      const releaseVisual = heldStatus === HOLD_RELEASING ? holdVisual : 0;
+      const motionVisual = activeGrab + releaseVisual * 0.82;
+      const dragIntensity = motionVisual * data.grabIntensity[i];
+      const dragBank = motionVisual * data.grabBank[i];
       const exitBankTarget =
-        data.exitState[i] > 0
+        heldStatus === HOLD_NONE && data.exitState[i] > 0
           ? clamp(data.exitX[i] * (hero ? 0.58 : 0.44) - data.exitY[i] * 0.08, -0.82, 0.82) *
             exitT
           : 0;
       const wakeEase = 1 - Math.exp(-dt * (Math.abs(data.wakeCue[i]) > 0.001 ? 8.2 : 2.4));
       data.wakeRoll[i] += (data.wakeCue[i] - data.wakeRoll[i]) * wakeEase;
+      const holdIdleRoll =
+        holdVisual * Math.sin(elapsed * 0.56 + data.grabPhase[i]) * (reducedMotion ? 0.045 : 0.11);
+      const dragFollowRoll = dragBank + dragIntensity * Math.sin(elapsed * 1.18 + data.grabPhase[i]) * (reducedMotion ? 0.025 : 0.06);
       const bankTarget = clamp(
         -data.vx[i] * (hero ? 0.086 : 0.075) -
           data.ax[i] * 0.014 +
           data.wakeRoll[i] * 0.34 +
-          exitBankTarget,
+          exitBankTarget +
+          holdIdleRoll +
+          dragFollowRoll,
         hero ? -0.92 : -0.74,
         hero ? 0.92 : 0.74,
       );
@@ -1015,36 +1461,61 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       const flapRate =
         data.flapSpeed[i] *
         (0.7 + speedAfter * (hero ? 0.05 : 0.038) + Math.abs(data.roll[i]) * 0.16) *
-        (1 - exitCommitVisual * (hero ? 0.16 : 0.07));
+        (1 - exitCommitVisual * (hero ? 0.16 : 0.07)) *
+        (1 - holdVisual * (reducedMotion ? 0.18 : 0.3)) *
+        (1 + motionVisual * (reducedMotion ? 0.16 : 0.72) * (0.25 + dragIntensity));
       const wingCycle = elapsed * flapRate * (1 / TAU) + phase * (1 / TAU) + turbulence * 0.035;
       const wingPose = wingbeatCurve(wingCycle);
       const bodyPose = wingbeatCurve(wingCycle - (hero ? 0.055 : 0.04));
       const neckPose = wingbeatCurve(wingCycle - (hero ? 0.1 : 0.075));
       const tailPose = wingbeatCurve(wingCycle - (hero ? 0.13 : 0.1));
       const slowSway = Math.sin(elapsed * 0.31 + phase) * (hero ? 0.024 : 0.018);
-      const wingAmp =
+      const flockWingAmp =
         (reducedMotion ? 0.08 : hero ? 0.45 : mid ? 0.38 : 0.26) *
         (0.9 +
           speedAfter * 0.018 +
           Math.abs(data.wakeRoll[i]) * 0.12 +
           exitCommitVisual * (hero ? 0.22 : 0.12));
+      const heldWingAmp =
+        (reducedMotion ? 0.055 : 0.19) *
+        (1 + dragIntensity * (reducedMotion ? 0.45 : 1.65)) *
+        (1 + Math.sin(elapsed * 0.37 + data.grabPhase[i]) * 0.12);
+      const wingAmp = flockWingAmp * (1 - holdVisual) + heldWingAmp * holdVisual;
       const wingLift = (reducedMotion ? 0.08 : hero ? 0.15 : 0.13) + wingPose * wingAmp;
-      const bankAsymmetry = data.roll[i] * (hero ? 0.3 : 0.24) + data.wakeRoll[i] * 0.08;
+      const dragWingAsymmetry = dragBank * (reducedMotion ? 0.14 : 0.24);
+      const bankAsymmetry = data.roll[i] * (hero ? 0.3 : 0.24) + data.wakeRoll[i] * 0.08 + dragWingAsymmetry;
       const leftLift = wingLift - bankAsymmetry;
       const rightLift = wingLift + bankAsymmetry;
-      const bodyFloat = -bodyPose * (hero ? 0.038 : 0.026) + slowSway * 0.4;
-      const scale = data.size[i] * (1 - bodyPose * (hero ? 0.018 : 0.012));
+      const bodyFloat =
+        -bodyPose * (hero ? 0.038 : 0.026) +
+        slowSway * 0.4 +
+        holdVisual * Math.sin(elapsed * 0.5 + data.grabPhase[i]) * (reducedMotion ? 0.018 : 0.04) +
+        dragIntensity * -bodyPose * (reducedMotion ? 0.018 : 0.045);
+      const heldTargetSize = Math.max(data.size[i], hero ? 0.92 : 0.7);
+      const displaySize = data.size[i] + (heldTargetSize - data.size[i]) * holdVisual;
+      const scale = displaySize * (1 - bodyPose * (hero ? 0.018 : 0.012));
       const exitPitch =
-        data.exitState[i] > 0
+        heldStatus === HOLD_NONE && data.exitState[i] > 0
           ? exitCommitVisual * (-0.08 + clamp(data.exitY[i], -1, 1) * 0.045) * (hero ? 1.2 : 0.8)
           : 0;
+      const holdPitch =
+        holdVisual * Math.sin(elapsed * 0.44 + data.grabPhase[i] * 0.7) * (reducedMotion ? 0.018 : 0.04);
+      const dragPitch =
+        motionVisual *
+        clamp(
+          -data.vy[i] * (reducedMotion ? 0.006 : 0.011) - data.ay[i] * (reducedMotion ? 0.0015 : 0.003),
+          reducedMotion ? -0.04 : -0.095,
+          reducedMotion ? 0.04 : 0.095,
+        );
+      const neckFollow = dragIntensity * (reducedMotion ? 0.035 : 0.075);
+      const tailFollow = dragIntensity * (reducedMotion ? 0.045 : 0.11);
       let renderX = data.x[i];
       let renderY = data.y[i];
 
       baseObject.position.set(renderX, renderY, data.z[i]);
       baseObject.rotation.set(
-        pitch + slowSway - wingLift * 0.03 - bodyPose * 0.018 + exitPitch,
-        yaw,
+        pitch * (1 - holdVisual * 0.62) + slowSway - wingLift * 0.03 - bodyPose * 0.018 + exitPitch + holdPitch + dragPitch,
+        yaw * (1 - holdVisual * 0.62),
         data.roll[i] + wingPose * (hero ? 0.025 : 0.018) + exitCommitVisual * data.exitX[i] * 0.05,
       );
       baseObject.scale.setScalar(scale);
@@ -1057,8 +1528,8 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         -0.35,
         0.055 + bodyFloat,
         0.04,
-        -0.04 - bodyPose * 0.018,
-        -0.035 - data.roll[i] * 0.035,
+        -0.04 - bodyPose * 0.018 - dragPitch * 0.18,
+        -0.035 - data.roll[i] * 0.035 - dragBank * 0.08,
         -leftLift,
         data.wingScale[i],
         1,
@@ -1070,8 +1541,8 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         0.35,
         0.055 + bodyFloat,
         0.04,
-        -0.04 - bodyPose * 0.018,
-        0.035 - data.roll[i] * 0.035,
+        -0.04 - bodyPose * 0.018 - dragPitch * 0.18,
+        0.035 - data.roll[i] * 0.035 - dragBank * 0.08,
         rightLift,
         data.wingScale[i],
         1,
@@ -1083,8 +1554,8 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         0,
         0.035 + bodyFloat,
         0.58,
-        0.09 + neckPose * 0.04 - pitch * 0.06,
-        data.roll[i] * -0.08 + data.wakeRoll[i] * 0.035,
+        0.09 + neckPose * 0.04 - pitch * 0.06 - dragPitch * 0.32 + neckFollow,
+        data.roll[i] * -0.08 + data.wakeRoll[i] * 0.035 - dragBank * 0.22,
         0,
         1,
         data.neckScale[i],
@@ -1096,8 +1567,8 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         0,
         0.02 + bodyFloat,
         -0.58,
-        -0.075 - tailPose * 0.052 + pitch * 0.05,
-        data.roll[i] * 0.06 - data.wakeRoll[i] * 0.03,
+        -0.075 - tailPose * 0.052 + pitch * 0.05 + dragPitch * 0.44 - tailFollow,
+        data.roll[i] * 0.06 - data.wakeRoll[i] * 0.03 + dragBank * 0.24,
         0,
         1,
         data.tailScale[i],
@@ -1115,13 +1586,27 @@ function CraneField({ count, reducedMotion, interactionRef }) {
 
   return (
     <>
-      <instancedMesh ref={bodyRef} args={[geometries.body, undefined, count]} frustumCulled={false}>
+      <instancedMesh
+        ref={bodyRef}
+        args={[geometries.body, undefined, count]}
+        frustumCulled={false}
+        onPointerDown={handleCranePointerDown}
+        onPointerMove={handleCranePointerMove}
+        onPointerUp={handleCranePointerRelease}
+        onPointerCancel={handleCranePointerRelease}
+        onLostPointerCapture={handleCranePointerRelease}
+      >
         <meshStandardMaterial {...paperMaterialProps} />
       </instancedMesh>
       <instancedMesh
         ref={leftWingRef}
         args={[geometries.leftWing, undefined, count]}
         frustumCulled={false}
+        onPointerDown={handleCranePointerDown}
+        onPointerMove={handleCranePointerMove}
+        onPointerUp={handleCranePointerRelease}
+        onPointerCancel={handleCranePointerRelease}
+        onLostPointerCapture={handleCranePointerRelease}
       >
         <meshStandardMaterial {...paperMaterialProps} />
       </instancedMesh>
@@ -1129,13 +1614,36 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         ref={rightWingRef}
         args={[geometries.rightWing, undefined, count]}
         frustumCulled={false}
+        onPointerDown={handleCranePointerDown}
+        onPointerMove={handleCranePointerMove}
+        onPointerUp={handleCranePointerRelease}
+        onPointerCancel={handleCranePointerRelease}
+        onLostPointerCapture={handleCranePointerRelease}
       >
         <meshStandardMaterial {...paperMaterialProps} />
       </instancedMesh>
-      <instancedMesh ref={neckRef} args={[geometries.neck, undefined, count]} frustumCulled={false}>
+      <instancedMesh
+        ref={neckRef}
+        args={[geometries.neck, undefined, count]}
+        frustumCulled={false}
+        onPointerDown={handleCranePointerDown}
+        onPointerMove={handleCranePointerMove}
+        onPointerUp={handleCranePointerRelease}
+        onPointerCancel={handleCranePointerRelease}
+        onLostPointerCapture={handleCranePointerRelease}
+      >
         <meshStandardMaterial {...paperMaterialProps} />
       </instancedMesh>
-      <instancedMesh ref={tailRef} args={[geometries.tail, undefined, count]} frustumCulled={false}>
+      <instancedMesh
+        ref={tailRef}
+        args={[geometries.tail, undefined, count]}
+        frustumCulled={false}
+        onPointerDown={handleCranePointerDown}
+        onPointerMove={handleCranePointerMove}
+        onPointerUp={handleCranePointerRelease}
+        onPointerCancel={handleCranePointerRelease}
+        onLostPointerCapture={handleCranePointerRelease}
+      >
         <meshStandardMaterial {...paperMaterialProps} />
       </instancedMesh>
     </>
@@ -1297,6 +1805,11 @@ export default function App() {
     burstX: 0,
     burstY: 0,
     burstTime: -100,
+    suppressBurstUntil: -100,
+    isGrabbing: false,
+    grabbedIndex: -1,
+    grabbedPointerId: -1,
+    grabReleaseRequested: false,
   });
 
   const updateInteraction = useCallback((event) => {
@@ -1305,7 +1818,12 @@ export default function App() {
     const y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
     const now = performance.now() / 1000;
     const interaction = interactionRef.current;
-    const hasRecentMove = interaction.active && now - interaction.lastMove < 0.18;
+    const grabbingThisPointer =
+      interaction.isGrabbing &&
+      (interaction.grabbedPointerId < 0 || event.pointerId === interaction.grabbedPointerId);
+    if (interaction.isGrabbing && !grabbingThisPointer) return;
+
+    const hasRecentMove = (grabbingThisPointer || interaction.active) && now - interaction.lastMove < 0.18;
     if (hasRecentMove) {
       const dt = clamp(now - interaction.lastMove, 0.016, 0.12);
       interaction.vx += ((x - interaction.x) / dt - interaction.vx) * 0.36;
@@ -1314,7 +1832,7 @@ export default function App() {
       interaction.vx = 0;
       interaction.vy = 0;
     }
-    interaction.active = true;
+    interaction.active = !grabbingThisPointer;
     interaction.x = x;
     interaction.y = y;
     interaction.lastMove = now;
@@ -1322,13 +1840,41 @@ export default function App() {
 
   const triggerBurst = useCallback(
     (event) => {
+      if (interactionRef.current.isGrabbing) {
+        updateInteraction(event);
+        return;
+      }
+
       updateInteraction(event);
-      interactionRef.current.burstX = interactionRef.current.x;
-      interactionRef.current.burstY = interactionRef.current.y;
-      interactionRef.current.burstTime = performance.now() / 1000;
+      requestAnimationFrame(() => {
+        const interaction = interactionRef.current;
+        const now = performance.now() / 1000;
+        if (interaction.isGrabbing || now < interaction.suppressBurstUntil) return;
+
+        interaction.burstX = interaction.x;
+        interaction.burstY = interaction.y;
+        interaction.burstTime = now;
+      });
     },
     [updateInteraction],
   );
+
+  const releaseGrabInteraction = useCallback((event) => {
+    const interaction = interactionRef.current;
+    const pointerMatches =
+      interaction.grabbedPointerId < 0 ||
+      !Number.isFinite(event.pointerId) ||
+      event.pointerId === interaction.grabbedPointerId;
+
+    if (interaction.isGrabbing && pointerMatches) {
+      interaction.isGrabbing = false;
+      interaction.grabReleaseRequested = true;
+    }
+
+    interaction.active = false;
+    interaction.vx = 0;
+    interaction.vy = 0;
+  }, []);
 
   return (
     <main className="experience" aria-label="A Thousand Paper Cranes immersive 3D artwork">
@@ -1344,11 +1890,9 @@ export default function App() {
         }}
         onPointerMove={updateInteraction}
         onPointerDown={triggerBurst}
-        onPointerLeave={() => {
-          interactionRef.current.active = false;
-          interactionRef.current.vx = 0;
-          interactionRef.current.vy = 0;
-        }}
+        onPointerUp={releaseGrabInteraction}
+        onPointerCancel={releaseGrabInteraction}
+        onPointerLeave={releaseGrabInteraction}
       >
         <Scene tier={tier} interactionRef={interactionRef} />
       </Canvas>
