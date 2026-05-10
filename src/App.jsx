@@ -23,25 +23,143 @@ const EXIT_FLYBY = 6;
 const HOLD_NONE = 0;
 const HOLD_GRABBED = 1;
 const HOLD_RELEASING = 2;
+const HOLD_STORED = 3;
 const GRAB_MIN_Z = 4;
 const GRAB_MAX_Z = 8;
 const RELEASE_MOMENTUM_DURATION = 0.58;
+const GMT7_OFFSET_MS = 7 * 60 * 60 * 1000;
+const HISTORY_STORAGE_KEY = 'a-thousand-wishes:deposited-cranes:v1';
 
-const CRANE_PALETTE = [
-  { h: 0.03, s: 0.36, l: 0.82 },
-  { h: 0.08, s: 0.4, l: 0.8 },
-  { h: 0.13, s: 0.36, l: 0.83 },
-  { h: 0.38, s: 0.34, l: 0.81 },
-  { h: 0.49, s: 0.38, l: 0.82 },
-  { h: 0.58, s: 0.38, l: 0.82 },
-  { h: 0.72, s: 0.34, l: 0.84 },
-  { h: 0.91, s: 0.35, l: 0.83 },
+const CRANE_WHITE = 0;
+const CRANE_RED = 1;
+const CRANE_BLUE = 2;
+const CRANE_COLOR_CONFIG = [
+  {
+    type: CRANE_WHITE,
+    key: 'white',
+    label: 'Pastel white',
+    h: 0.105,
+    s: 0.2,
+    l: 0.86,
+    noteClass: 'note-white',
+  },
+  {
+    type: CRANE_RED,
+    key: 'red',
+    label: 'Pastel red',
+    h: 0.988,
+    s: 0.72,
+    l: 0.69,
+    noteClass: 'note-red',
+  },
+  {
+    type: CRANE_BLUE,
+    key: 'blue',
+    label: 'Pastel blue',
+    h: 0.565,
+    s: 0.72,
+    l: 0.62,
+    noteClass: 'note-blue',
+  },
 ];
+
+const WISH_MESSAGES = [
+  'A quiet wish for tomorrow.',
+  'May this memory stay gentle.',
+  'Keep going, even softly.',
+  'Let the light find its way back.',
+  'A small hope, folded carefully.',
+  'For every goodbye, a kinder beginning.',
+  'Carry this tenderness forward.',
+  'May the next sky feel lighter.',
+  'Hold this moment without hurry.',
+  'A thousand small chances to begin again.',
+];
+
+const STORED_SLOT_OFFSETS = [
+  [-0.5, -0.42, 0.08],
+  [-0.18, -0.48, -0.02],
+  [0.18, -0.45, 0.06],
+  [0.5, -0.4, -0.04],
+  [-0.36, -0.18, 0.04],
+  [0.0, -0.22, -0.06],
+  [0.35, -0.14, 0.07],
+  [-0.2, 0.02, -0.03],
+  [0.18, 0.05, 0.05],
+];
+
+const SKY_STYLES = {
+  dawn: {
+    key: 'dawn',
+    top: '#7daee5',
+    middle: '#efb7ca',
+    horizon: '#ffe3ad',
+    fog: '#cfd9e9',
+    ambient: 0.78,
+    hemiSky: '#fff1da',
+    hemiGround: '#7c8ea9',
+    hemiIntensity: 1.18,
+    sun: '#ffe0a8',
+    sunIntensity: 2.45,
+    rim: '#ffbfd2',
+    rimIntensity: 0.72,
+    particleOpacity: 0.22,
+  },
+  day: {
+    key: 'day',
+    top: '#73b9e9',
+    middle: '#bfe8fb',
+    horizon: '#fff2d4',
+    fog: '#cfeaf5',
+    ambient: 0.92,
+    hemiSky: '#f5fbff',
+    hemiGround: '#94b7c8',
+    hemiIntensity: 1.38,
+    sun: '#fff0c8',
+    sunIntensity: 2.75,
+    rim: '#b9e9ff',
+    rimIntensity: 0.58,
+    particleOpacity: 0.16,
+  },
+  sunset: {
+    key: 'sunset',
+    top: '#6576b5',
+    middle: '#ed9fa7',
+    horizon: '#ffd08f',
+    fog: '#d8b8c6',
+    ambient: 0.74,
+    hemiSky: '#ffe2c4',
+    hemiGround: '#766d99',
+    hemiIntensity: 1.16,
+    sun: '#ffbe7d',
+    sunIntensity: 2.35,
+    rim: '#ff9ea7',
+    rimIntensity: 0.92,
+    particleOpacity: 0.2,
+  },
+  night: {
+    key: 'night',
+    top: '#273b65',
+    middle: '#49678f',
+    horizon: '#8ea7c5',
+    fog: '#637d9e',
+    ambient: 0.62,
+    hemiSky: '#d9eaff',
+    hemiGround: '#2c3657',
+    hemiIntensity: 0.96,
+    sun: '#d6e7ff',
+    sunIntensity: 1.5,
+    rim: '#abc9ff',
+    rimIntensity: 0.68,
+    particleOpacity: 0.24,
+  },
+};
 
 const random = (min, max) => min + Math.random() * (max - min);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const clamp01 = (value) => clamp(value, 0, 1);
 const wrap01 = (value) => value - Math.floor(value);
+const nullRaycast = () => null;
 const smoothstep = (edge0, edge1, value) => {
   const t = clamp01((value - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
@@ -66,6 +184,128 @@ const wingbeatCurve = (cycle) => {
 
   return 1 - easeInOutSine((t - 0.88) / 0.12) * 0.03;
 };
+
+const getCraneColorType = (index, count) => {
+  const whiteEnd = Math.floor(count * 0.3);
+  const redEnd = whiteEnd + Math.floor(count * 0.3);
+  if (index < whiteEnd) return CRANE_WHITE;
+  if (index < redEnd) return CRANE_RED;
+  return CRANE_BLUE;
+};
+
+const getCraneColorConfig = (colorType) => CRANE_COLOR_CONFIG[colorType] ?? CRANE_COLOR_CONFIG[0];
+
+const getGMT7Parts = (date = new Date()) => {
+  const shifted = new Date(date.getTime() + GMT7_OFFSET_MS);
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    hours: shifted.getUTCHours(),
+    minutes: shifted.getUTCMinutes(),
+    seconds: shifted.getUTCSeconds(),
+  };
+};
+
+const pad2 = (value) => String(value).padStart(2, '0');
+
+const formatGMT7Display = (date = new Date(), withSeconds = false) => {
+  const parts = getGMT7Parts(date);
+  const time = `${pad2(parts.hours)}:${pad2(parts.minutes)}${
+    withSeconds ? `:${pad2(parts.seconds)}` : ''
+  }`;
+  return `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year} ${time} GMT+7`;
+};
+
+const getSkyPhase = (parts) => {
+  const hour = parts.hours + parts.minutes / 60 + parts.seconds / 3600;
+  if (hour >= 5 && hour < 7.25) return 'dawn';
+  if (hour >= 7.25 && hour < 16.75) return 'day';
+  if (hour >= 16.75 && hour < 18.85) return 'sunset';
+  return 'night';
+};
+
+const createHistoryEntry = ({ craneIndex, colorType, message }) => {
+  const now = new Date();
+  const colorConfig = getCraneColorConfig(colorType);
+  return {
+    id: `${now.getTime()}-${craneIndex}-${colorConfig.key}`,
+    craneIndex,
+    colorType,
+    colorLabel: colorConfig.label,
+    message,
+    depositedAtISO: now.toISOString(),
+    depositedAtGMT7Display: formatGMT7Display(now, false),
+  };
+};
+
+const historyStorage = {
+  list() {
+    if (typeof window === 'undefined') return [];
+
+    try {
+      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((entry) => entry && entry.id) : [];
+    } catch {
+      return [];
+    }
+  },
+  add(entry) {
+    if (typeof window === 'undefined') return [entry];
+
+    const next = [entry, ...this.list()].slice(0, 160);
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Storage failures should not block the artwork or note reveal.
+    }
+    return next;
+  },
+  clear() {
+    if (typeof window === 'undefined') return [];
+
+    try {
+      window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+    return [];
+  },
+};
+
+const isInteractionInDropZone = (interaction, vessel) => {
+  if (!vessel || !Number.isFinite(vessel.dropX) || !Number.isFinite(vessel.dropY)) return false;
+
+  const radiusX = Math.max(0.001, vessel.radiusX ?? 0.16);
+  const radiusY = Math.max(0.001, vessel.radiusY ?? 0.13);
+  const dx = (interaction.x - vessel.dropX) / radiusX;
+  const dy = (interaction.y - vessel.dropY) / radiusY;
+  return dx * dx + dy * dy <= 1;
+};
+
+function useGMT7Clock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return useMemo(() => {
+    const parts = getGMT7Parts(now);
+    return {
+      parts,
+      phase: getSkyPhase(parts),
+      dateLabel: `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`,
+      timeLabel: `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`,
+    };
+  }, [now]);
+}
 
 function usePerformanceTier() {
   const [tier, setTier] = useState({
@@ -201,6 +441,136 @@ function createPaperTextures() {
   bumpTexture.needsUpdate = true;
 
   return { map: texture, bumpMap: bumpTexture };
+}
+
+function createSkyTexture(skyStyle) {
+  if (typeof document === 'undefined') return null;
+
+  const width = 64;
+  const height = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, skyStyle.top);
+  gradient.addColorStop(0.48, skyStyle.middle);
+  gradient.addColorStop(1, skyStyle.horizon);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+
+  const glowY = skyStyle.key === 'night' ? height * 0.28 : height * 0.72;
+  const glowX = skyStyle.key === 'sunset' ? width * 0.18 : width * 0.78;
+  const glow = context.createRadialGradient(glowX, glowY, 0, glowX, glowY, height * 0.42);
+  glow.addColorStop(0, skyStyle.key === 'night' ? 'rgba(222,236,255,0.4)' : 'rgba(255,244,210,0.54)');
+  glow.addColorStop(0.46, skyStyle.key === 'night' ? 'rgba(160,190,245,0.13)' : 'rgba(255,210,160,0.2)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = glow;
+  context.fillRect(0, 0, width, height);
+
+  context.globalAlpha = skyStyle.key === 'night' ? 0.08 : 0.34;
+  for (let cluster = 0; cluster < 7; cluster += 1) {
+    const cx = width * random(-0.15, 1.15);
+    const cy = height * random(0.18, 0.72);
+    const radius = random(18, 46);
+    const cloud = context.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    cloud.addColorStop(0, 'rgba(255,255,255,0.46)');
+    cloud.addColorStop(0.52, 'rgba(255,255,255,0.18)');
+    cloud.addColorStop(0.78, 'rgba(155,184,205,0.06)');
+    cloud.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = cloud;
+    context.fillRect(0, 0, width, height);
+  }
+
+  context.globalAlpha = skyStyle.key === 'day' ? 0.28 : 0.32;
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 5;
+  for (let i = 0; i < 18; i += 1) {
+    const y = height * random(0.35, 0.92);
+    const x = random(-width * 0.4, width * 0.7);
+    context.beginPath();
+    context.moveTo(x, y);
+    context.bezierCurveTo(width * 0.26, y + random(-8, 8), width * 0.72, y + random(-10, 10), width * 1.35, y + random(-4, 4));
+    context.stroke();
+  }
+  context.globalAlpha = 1;
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createCloudTexture(seed = 1) {
+  if (typeof document === 'undefined') return null;
+
+  let value = seed * 2654435761;
+  const next = () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let cluster = 0; cluster < 7; cluster += 1) {
+    const cx = next() * canvas.width;
+    const cy = canvas.height * (0.28 + next() * 0.48);
+    const width = canvas.width * (0.12 + next() * 0.18);
+    const height = canvas.height * (0.08 + next() * 0.16);
+
+    for (let puff = 0; puff < 18; puff += 1) {
+      const px = cx + (next() - 0.5) * width;
+      const py = cy + (next() - 0.5) * height;
+      const radius = canvas.width * (0.035 + next() * 0.075);
+      const alpha = 0.34 + next() * 0.34;
+      const gradient = context.createRadialGradient(px, py, 0, px, py, radius);
+      gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+      gradient.addColorStop(0.46, `rgba(255,255,255,${alpha * 0.68})`);
+      gradient.addColorStop(0.78, `rgba(174,199,216,${alpha * 0.28})`);
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      context.fillStyle = gradient;
+      context.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+    }
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createRadialGlowTexture(innerColor, outerColor = 'rgba(255,255,255,0)') {
+  if (typeof document === 'undefined') return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  const gradient = context.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gradient.addColorStop(0, innerColor);
+  gradient.addColorStop(0.42, innerColor.replace(/,\s*[\d.]+\)$/, ',0.22)'));
+  gradient.addColorStop(1, outerColor);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 256);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function v(x, y, z) {
@@ -544,6 +914,14 @@ function resetCrane(data, index, startSpread, reducedMotion) {
   data.grabPhase[index] = random(0, TAU);
   data.grabIntensity[index] = 0;
   data.grabBank[index] = 0;
+  data.storedSlot[index] = -1;
+  data.storedProgress[index] = 0;
+  data.storedSize[index] = 0;
+  data.storedX[index] = data.x[index];
+  data.storedY[index] = data.y[index];
+  data.storedZ[index] = data.z[index];
+  data.storedYaw[index] = 0;
+  data.storedRoll[index] = 0;
   data.exitState[index] = 0;
   data.exitSide[index] = EXIT_RIGHT;
   data.exitX[index] = 0;
@@ -557,11 +935,13 @@ function resetCrane(data, index, startSpread, reducedMotion) {
   data.neckScale[index] = random(0.9, 1.16);
   data.tailScale[index] = random(0.92, 1.18);
 
-  const colorSeed = CRANE_PALETTE[Math.floor(Math.random() * CRANE_PALETTE.length)];
+  const colorSeed = getCraneColorConfig(data.colorType[index]);
+  const colorType = data.colorType[index];
+  const saturatedPaper = colorType !== CRANE_WHITE;
   const color = new THREE.Color().setHSL(
-    (colorSeed.h + random(-0.018, 0.018) + 1) % 1,
-    clamp01(colorSeed.s + random(-0.045, 0.04) + (hero ? 0.03 : mid ? -0.02 : -0.14)),
-    clamp01(colorSeed.l + random(-0.035, 0.045) + (hero ? 0.04 : mid ? -0.01 : -0.13)),
+    (colorSeed.h + random(-0.01, 0.01) + 1) % 1,
+    clamp01(colorSeed.s + random(-0.018, 0.026) + (hero ? 0.025 : mid ? 0 : saturatedPaper ? -0.015 : -0.04)),
+    clamp01(colorSeed.l + random(-0.022, 0.026) + (hero ? 0.028 : mid ? -0.005 : saturatedPaper ? -0.035 : -0.06)),
   );
   data.color[index * 3] = color.r;
   data.color[index * 3 + 1] = color.g;
@@ -616,6 +996,14 @@ function createCraneData(count, reducedMotion) {
     grabPhase: new Float32Array(count),
     grabIntensity: new Float32Array(count),
     grabBank: new Float32Array(count),
+    storedSlot: new Int16Array(count),
+    storedProgress: new Float32Array(count),
+    storedSize: new Float32Array(count),
+    storedX: new Float32Array(count),
+    storedY: new Float32Array(count),
+    storedZ: new Float32Array(count),
+    storedYaw: new Float32Array(count),
+    storedRoll: new Float32Array(count),
     exitState: new Uint8Array(count),
     exitSide: new Int8Array(count),
     exitX: new Float32Array(count),
@@ -628,6 +1016,8 @@ function createCraneData(count, reducedMotion) {
     wingScale: new Float32Array(count),
     neckScale: new Float32Array(count),
     tailScale: new Float32Array(count),
+    colorType: new Uint8Array(count),
+    messageIndex: new Uint16Array(count),
     color: new Float32Array(count * 3),
   };
 
@@ -636,6 +1026,8 @@ function createCraneData(count, reducedMotion) {
   for (let i = 0; i < count; i += 1) {
     data.layer[i] = i < heroCount ? HERO_LAYER : i < midEnd ? MID_LAYER : BACK_LAYER;
     data.hero[i] = data.layer[i] === HERO_LAYER ? 1 : 0;
+    data.colorType[i] = getCraneColorType(i, count);
+    data.messageIndex[i] = i % WISH_MESSAGES.length;
     resetCrane(data, i, true, reducedMotion);
   }
 
@@ -649,16 +1041,21 @@ function setCraneColor(meshes, data, color, index) {
   }
 }
 
-function CraneField({ count, reducedMotion, interactionRef }) {
+function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingRef, onDeposit }) {
   const bodyRef = useRef();
   const leftWingRef = useRef();
   const rightWingRef = useRef();
   const neckRef = useRef();
   const tailRef = useRef();
   const meshesRef = useRef([]);
+  const { camera, gl } = useThree();
   const baseObject = useMemo(() => new THREE.Object3D(), []);
   const partObject = useMemo(() => new THREE.Object3D(), []);
   const finalMatrix = useMemo(() => new THREE.Matrix4(), []);
+  const pickPointer = useMemo(() => new THREE.Vector2(), []);
+  const pickRaycaster = useMemo(() => new THREE.Raycaster(), []);
+  const pickWorld = useMemo(() => new THREE.Vector3(), []);
+  const pickHits = useMemo(() => [], []);
   const geometries = useMemo(() => createCraneGeometries(), []);
   const paperTextures = useMemo(() => createPaperTextures(), []);
   const data = useMemo(() => createCraneData(count, reducedMotion), [count, reducedMotion]);
@@ -766,11 +1163,79 @@ function CraneField({ count, reducedMotion, interactionRef }) {
     }
   }, []);
 
+  const storeCraneInVessel = useCallback(
+    (index) => {
+      if (index < 0 || index >= count || data.held[index] === HOLD_STORED) return false;
+
+      const vessel = depositRef.current;
+      const interaction = interactionRef.current;
+      const nextSlot = vessel.nextSlot ?? 0;
+      const slot = nextSlot;
+      vessel.nextSlot = nextSlot + 1;
+      vessel.hovered = false;
+      vessel.hoveredIndex = -1;
+      vessel.pulse = 1;
+
+      data.held[index] = HOLD_STORED;
+      data.grabPointerId[index] = -1;
+      data.grabProgress[index] = 0;
+      data.grabReleaseProgress[index] = 0;
+      data.grabAge[index] = 0;
+      data.grabOffsetReady[index] = 0;
+      data.storedSlot[index] = slot;
+      data.storedProgress[index] = 0;
+      data.storedSize[index] = clamp(
+        data.size[index] * (data.hero[index] ? 0.34 : 0.52),
+        0.2,
+        data.hero[index] ? 0.38 : 0.34,
+      );
+      data.storedYaw[index] = random(-0.72, 0.72);
+      data.storedRoll[index] = random(-0.42, 0.42);
+      data.exitState[index] = 0;
+      data.exitAge[index] = 0;
+      data.offscreenTime[index] = 0;
+
+      const centerX = vessel.centerX ?? data.x[index];
+      const centerY = vessel.centerY ?? data.y[index];
+      const centerZ = vessel.centerZ ?? data.z[index];
+      data.vx[index] = (centerX - data.x[index]) * (reducedMotion ? 0.45 : 0.72);
+      data.vy[index] = (centerY - data.y[index]) * (reducedMotion ? 0.36 : 0.58) - (reducedMotion ? 0.22 : 0.42);
+      data.vz[index] = (centerZ - data.z[index]) * (reducedMotion ? 0.38 : 0.58);
+      data.ax[index] = 0;
+      data.ay[index] = 0;
+      data.az[index] = 0;
+      data.grabIntensity[index] = reducedMotion ? 0.16 : 0.28;
+      data.grabBank[index] = clamp((centerX - data.x[index]) * 0.035, -0.32, 0.32);
+
+      if (interaction.grabbedIndex === index) {
+        interaction.isGrabbing = false;
+        interaction.grabReleaseRequested = false;
+        interaction.grabbedIndex = -1;
+        interaction.grabbedPointerId = -1;
+      }
+
+      onDeposit?.({
+        craneIndex: index,
+        colorType: data.colorType[index],
+        message: WISH_MESSAGES[data.messageIndex[index] % WISH_MESSAGES.length],
+      });
+
+      return true;
+    },
+    [count, data, depositRef, interactionRef, onDeposit, reducedMotion],
+  );
+
   const releaseGrabbedCrane = useCallback(
     (index) => {
       if (index < 0 || index >= count || data.held[index] !== HOLD_GRABBED) return;
 
       const interaction = interactionRef.current;
+      const vessel = depositRef.current;
+      if ((vessel.hovered && vessel.hoveredIndex === index) || isInteractionInDropZone(interaction, vessel)) {
+        storeCraneInVessel(index);
+        return;
+      }
+
       data.held[index] = HOLD_RELEASING;
       data.grabPointerId[index] = -1;
       data.grabProgress[index] = Math.max(0.26, data.grabProgress[index]);
@@ -831,12 +1296,13 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         interaction.grabbedPointerId = -1;
       }
     },
-    [count, data, interactionRef, reducedMotion],
+    [count, data, depositRef, interactionRef, reducedMotion, storeCraneInVessel],
   );
 
   const startGrabCrane = useCallback(
     (index, event) => {
       if (index < 0 || index >= count) return;
+      if (data.held[index] === HOLD_STORED) return;
 
       const interaction = interactionRef.current;
       const previousIndex = interaction.grabbedIndex;
@@ -901,13 +1367,96 @@ function CraneField({ count, reducedMotion, interactionRef }) {
 
   const handleCranePointerDown = useCallback(
     (event) => {
-      const instanceId = event.instanceId;
+      const instanceId = Number.isInteger(event.instanceId)
+        ? event.instanceId
+        : event.intersections?.find((hit) => Number.isInteger(hit.instanceId))?.instanceId;
       if (!Number.isInteger(instanceId)) return;
       event.stopPropagation();
       startGrabCrane(instanceId, event);
     },
     [startGrabCrane],
   );
+
+  useEffect(() => {
+    if (!pickingRef) return undefined;
+
+    const pickCraneFromPointer = (event) => {
+      const meshes = meshesRef.current;
+      if (meshes.length !== 5) return false;
+
+      const target = event.currentTarget ?? gl.domElement;
+      const rect = target?.getBoundingClientRect?.();
+      if (!rect || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return false;
+
+      pickPointer.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -(((event.clientY - rect.top) / rect.height) * 2 - 1),
+      );
+      pickRaycaster.setFromCamera(pickPointer, camera);
+      pickHits.length = 0;
+      pickRaycaster.intersectObjects(meshes, false, pickHits);
+
+      for (let i = 0; i < pickHits.length; i += 1) {
+        const instanceId = pickHits[i].instanceId;
+        if (!Number.isInteger(instanceId) || instanceId < 0 || instanceId >= count) continue;
+        if (data.held[instanceId] === HOLD_STORED) continue;
+
+        startGrabCrane(instanceId, {
+          pointerId: event.pointerId,
+          target: gl.domElement,
+          currentTarget: gl.domElement,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          sourceEvent: event,
+        });
+        return true;
+      }
+
+      let bestIndex = -1;
+      let bestScore = Infinity;
+      const fov = THREE.MathUtils.degToRad(camera.fov);
+      const aspect = rect.width / rect.height;
+      for (let i = 0; i < count; i += 1) {
+        if (data.held[i] === HOLD_STORED) continue;
+
+        pickWorld.set(data.x[i], data.y[i], data.z[i]).project(camera);
+        if (pickWorld.z < -1 || pickWorld.z > 1) continue;
+
+        const distanceToCamera = Math.max(0.01, camera.position.z - data.z[i]);
+        const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+        const radius = clamp((data.size[i] * (data.hero[i] ? 5.6 : 4.8)) / viewHeight, 0.018, data.hero[i] ? 0.12 : 0.07);
+        const dx = pickPointer.x - pickWorld.x;
+        const dy = pickPointer.y - pickWorld.y;
+        const d2 = dx * dx + dy * dy * aspect;
+
+        if (d2 < radius * radius && d2 < bestScore) {
+          bestScore = d2;
+          bestIndex = i;
+        }
+      }
+
+      if (bestIndex >= 0) {
+        startGrabCrane(bestIndex, {
+          pointerId: event.pointerId,
+          target: gl.domElement,
+          currentTarget: gl.domElement,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          sourceEvent: event,
+        });
+        return true;
+      }
+
+      return false;
+    };
+
+    pickingRef.current.pickCraneFromPointer = pickCraneFromPointer;
+    return () => {
+      if (pickingRef.current.pickCraneFromPointer === pickCraneFromPointer) {
+        pickingRef.current.pickCraneFromPointer = null;
+      }
+    };
+  }, [camera, count, data, gl, pickHits, pickPointer, pickRaycaster, pickWorld, pickingRef, startGrabCrane]);
 
   const handleCranePointerMove = useCallback(
     (event) => {
@@ -951,6 +1500,9 @@ function CraneField({ count, reducedMotion, interactionRef }) {
     const baseSeparationRadiusSq = reducedMotion ? 5.8 : 8.4;
     const simScale = reducedMotion ? 0.45 : 1;
     let colorsChanged = false;
+    const vessel = depositRef.current;
+    vessel.hovered = false;
+    vessel.hoveredIndex = -1;
 
     for (let i = 0; i < count; i += 1) {
       const xi = data.x[i];
@@ -981,6 +1533,33 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         data.exitState[i] = 0;
         data.offscreenTime[i] = 0;
         data.grabAge[i] += dt;
+
+        if (heldStatus === HOLD_STORED) {
+          const slot = Math.max(0, data.storedSlot[i]);
+          const slotOffset = STORED_SLOT_OFFSETS[slot % STORED_SLOT_OFFSETS.length];
+          const stack = Math.floor(slot / STORED_SLOT_OFFSETS.length);
+          const vesselScale = vessel.scale ?? 1.8;
+          const stackLift = Math.min(stack, 5) * 0.085;
+          const targetX = (vessel.centerX ?? 8.4) + slotOffset[0] * vesselScale;
+          const targetY = (vessel.centerY ?? -5.5) + (slotOffset[1] + stackLift) * vesselScale;
+          const targetZ = (vessel.centerZ ?? 3.2) + slotOffset[2] * vesselScale;
+          const settle = smoothstep(0, 1, data.storedProgress[i]);
+          const idle = reducedMotion ? 0 : Math.sin(elapsed * 0.52 + data.grabPhase[i]) * 0.018;
+          const spring = (reducedMotion ? 5.4 : 8.8) * (0.7 + settle * 0.55);
+          const damping = reducedMotion ? 5.2 : 7.8;
+
+          data.storedProgress[i] = Math.min(1, data.storedProgress[i] + dt / (reducedMotion ? 1.18 : 0.82));
+          data.storedX[i] = targetX;
+          data.storedY[i] = targetY;
+          data.storedZ[i] = targetZ;
+          data.ax[i] = (targetX - xi) * spring - data.vx[i] * damping;
+          data.ay[i] = (targetY + idle - yi) * spring - data.vy[i] * damping - (1 - settle) * (reducedMotion ? 0.18 : 0.36);
+          data.az[i] = (targetZ - zi) * spring - data.vz[i] * damping;
+          data.grabIntensity[i] += (0 - data.grabIntensity[i]) * (1 - Math.exp(-dt * 1.8));
+          data.grabBank[i] += (0 - data.grabBank[i]) * (1 - Math.exp(-dt * 2.2));
+          data.wakeCue[i] = 0;
+          continue;
+        }
 
         let grabTargetX = data.grabX[i];
         let grabTargetY = data.grabY[i];
@@ -1021,6 +1600,19 @@ function CraneField({ count, reducedMotion, interactionRef }) {
           data.grabX[i] = grabTargetX;
           data.grabY[i] = grabTargetY;
           data.grabZ[i] = grabTargetZ;
+
+          if (isInteractionInDropZone(interaction, vessel)) {
+            vessel.hovered = true;
+            vessel.hoveredIndex = i;
+          } else if (Number.isFinite(vessel.mouthX)) {
+            const mouthDx = (grabTargetX - vessel.mouthX) / Math.max(0.1, vessel.worldRadiusX ?? 1);
+            const mouthDy = (grabTargetY - vessel.mouthY) / Math.max(0.1, vessel.worldRadiusY ?? 0.7);
+            const mouthDz = (grabTargetZ - vessel.mouthZ) / Math.max(0.1, vessel.worldRadiusZ ?? 1);
+            if (mouthDx * mouthDx + mouthDy * mouthDy + mouthDz * mouthDz < 1.15) {
+              vessel.hovered = true;
+              vessel.hoveredIndex = i;
+            }
+          }
 
           if (firstGrabFrame) {
             data.grabPrevX[i] = grabTargetX;
@@ -1362,6 +1954,10 @@ function CraneField({ count, reducedMotion, interactionRef }) {
           ? reducedMotion
             ? 24
             : 38
+          : heldStatus === HOLD_STORED
+            ? reducedMotion
+              ? 4.8
+              : 7.4
           : heldStatus === HOLD_RELEASING
             ? reducedMotion
               ? 13.2
@@ -1429,6 +2025,7 @@ function CraneField({ count, reducedMotion, interactionRef }) {
           : heldStatus === HOLD_RELEASING
             ? smoothstep(0, 1, data.grabProgress[i]) * 0.75
             : 0;
+      const storedVisual = heldStatus === HOLD_STORED ? smoothstep(0, 1, data.storedProgress[i]) : 0;
       const activeGrab = heldStatus === HOLD_GRABBED ? holdVisual : 0;
       const releaseVisual = heldStatus === HOLD_RELEASING ? holdVisual : 0;
       const motionVisual = activeGrab + releaseVisual * 0.82;
@@ -1480,19 +2077,26 @@ function CraneField({ count, reducedMotion, interactionRef }) {
         (reducedMotion ? 0.055 : 0.19) *
         (1 + dragIntensity * (reducedMotion ? 0.45 : 1.65)) *
         (1 + Math.sin(elapsed * 0.37 + data.grabPhase[i]) * 0.12);
-      const wingAmp = flockWingAmp * (1 - holdVisual) + heldWingAmp * holdVisual;
+      const storedWingAmp =
+        (reducedMotion ? 0.018 : 0.04) *
+        (1 + Math.sin(elapsed * 0.36 + data.grabPhase[i]) * 0.14);
+      let wingAmp = flockWingAmp * (1 - holdVisual) + heldWingAmp * holdVisual;
+      wingAmp = wingAmp * (1 - storedVisual) + storedWingAmp * storedVisual;
       const wingLift = (reducedMotion ? 0.08 : hero ? 0.15 : 0.13) + wingPose * wingAmp;
       const dragWingAsymmetry = dragBank * (reducedMotion ? 0.14 : 0.24);
       const bankAsymmetry = data.roll[i] * (hero ? 0.3 : 0.24) + data.wakeRoll[i] * 0.08 + dragWingAsymmetry;
       const leftLift = wingLift - bankAsymmetry;
       const rightLift = wingLift + bankAsymmetry;
-      const bodyFloat =
+      let bodyFloat =
         -bodyPose * (hero ? 0.038 : 0.026) +
         slowSway * 0.4 +
         holdVisual * Math.sin(elapsed * 0.5 + data.grabPhase[i]) * (reducedMotion ? 0.018 : 0.04) +
         dragIntensity * -bodyPose * (reducedMotion ? 0.018 : 0.045);
+      bodyFloat += storedVisual * Math.sin(elapsed * 0.46 + data.grabPhase[i]) * (reducedMotion ? 0.004 : 0.012);
       const heldTargetSize = Math.max(data.size[i], hero ? 0.92 : 0.7);
-      const displaySize = data.size[i] + (heldTargetSize - data.size[i]) * holdVisual;
+      const storedTargetSize = data.storedSize[i] > 0 ? data.storedSize[i] : data.size[i] * 0.42;
+      let displaySize = data.size[i] + (heldTargetSize - data.size[i]) * holdVisual;
+      displaySize = displaySize * (1 - storedVisual) + storedTargetSize * storedVisual;
       const scale = displaySize * (1 - bodyPose * (hero ? 0.018 : 0.012));
       const exitPitch =
         heldStatus === HOLD_NONE && data.exitState[i] > 0
@@ -1511,12 +2115,28 @@ function CraneField({ count, reducedMotion, interactionRef }) {
       const tailFollow = dragIntensity * (reducedMotion ? 0.045 : 0.11);
       let renderX = data.x[i];
       let renderY = data.y[i];
+      const normalPitch =
+        pitch * (1 - holdVisual * 0.62) +
+        slowSway -
+        wingLift * 0.03 -
+        bodyPose * 0.018 +
+        exitPitch +
+        holdPitch +
+        dragPitch;
+      const normalYaw = yaw * (1 - holdVisual * 0.62);
+      const normalRoll =
+        data.roll[i] + wingPose * (hero ? 0.025 : 0.018) + exitCommitVisual * data.exitX[i] * 0.05;
+      const storedPitch =
+        0.22 + Math.sin(elapsed * 0.4 + data.grabPhase[i]) * (reducedMotion ? 0.006 : 0.018);
+      const storedYaw = data.storedYaw[i];
+      const storedRoll =
+        data.storedRoll[i] + Math.sin(elapsed * 0.32 + data.grabPhase[i]) * (reducedMotion ? 0.005 : 0.014);
 
       baseObject.position.set(renderX, renderY, data.z[i]);
       baseObject.rotation.set(
-        pitch * (1 - holdVisual * 0.62) + slowSway - wingLift * 0.03 - bodyPose * 0.018 + exitPitch + holdPitch + dragPitch,
-        yaw * (1 - holdVisual * 0.62),
-        data.roll[i] + wingPose * (hero ? 0.025 : 0.018) + exitCommitVisual * data.exitX[i] * 0.05,
+        normalPitch * (1 - storedVisual) + storedPitch * storedVisual,
+        normalYaw * (1 - storedVisual) + storedYaw * storedVisual,
+        normalRoll * (1 - storedVisual) + storedRoll * storedVisual,
       );
       baseObject.scale.setScalar(scale);
       baseObject.updateMatrix();
@@ -1650,8 +2270,150 @@ function CraneField({ count, reducedMotion, interactionRef }) {
   );
 }
 
-function StarField({ count, reducedMotion }) {
+function SkyBackdrop({ skyStyle }) {
+  const texture = useMemo(() => createSkyTexture(skyStyle), [skyStyle]);
+
+  useEffect(
+    () => () => {
+      texture?.dispose();
+    },
+    [texture],
+  );
+
+  return (
+    <mesh position={[0, 0, FAR_Z + 18]} renderOrder={-100} raycast={nullRaycast}>
+      <planeGeometry args={[520, 330]} />
+      <meshBasicMaterial map={texture} depthWrite={false} depthTest={false} toneMapped={false} />
+    </mesh>
+  );
+}
+
+function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
+  const meshRef = useRef();
+  const { camera, size } = useThree();
+  const texture = useMemo(() => createCloudTexture(layer + 3), [layer]);
+
+  useEffect(
+    () => () => {
+      texture?.dispose();
+    },
+    [texture],
+  );
+
+  useFrame(({ clock }, delta) => {
+    if (!meshRef.current || !texture) return;
+
+    const elapsed = clock.getElapsedTime();
+    const z = layer === 0 ? FAR_Z + 46 : FAR_Z + 28;
+    const distanceToCamera = camera.position.z - z;
+    const fov = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const viewWidth = viewHeight * (size.width / size.height);
+    const x = camera.position.x + (layer === 0 ? -0.18 : 0.22) * viewWidth * 0.5;
+    const y = camera.position.y + (layer === 0 ? 0.18 : -0.06) * viewHeight * 0.5;
+    const drift = reducedMotion ? 0 : elapsed * (layer === 0 ? 0.004 : -0.006);
+
+    texture.offset.x = wrap01(texture.offset.x + delta * (reducedMotion ? 0.0006 : layer === 0 ? 0.0018 : -0.0012));
+    meshRef.current.position.set(x + Math.sin(elapsed * 0.035 + layer) * 1.5, y, z);
+    meshRef.current.rotation.z = (layer === 0 ? -0.03 : 0.04) + Math.sin(elapsed * 0.02 + layer) * 0.01;
+    meshRef.current.scale.set(viewWidth * (layer === 0 ? 0.68 : 0.58), viewHeight * (layer === 0 ? 0.24 : 0.2), 1);
+    meshRef.current.material.opacity =
+      (skyStyle.key === 'night' ? 0.28 : skyStyle.key === 'day' ? 0.95 : 1.0) *
+      (1 + Math.sin(drift + layer) * 0.08);
+  });
+
+  return (
+    <mesh ref={meshRef} raycast={nullRaycast} renderOrder={-80}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial
+        map={texture}
+        color={skyStyle.key === 'sunset' ? '#ffd2c5' : '#ffffff'}
+        transparent
+        opacity={0.2}
+        depthWrite={false}
+        depthTest={false}
+      />
+    </mesh>
+  );
+}
+
+function SkyOrb({ skyStyle, reducedMotion }) {
+  const groupRef = useRef();
+  const glowRef = useRef();
+  const diskRef = useRef();
+  const { camera, size } = useThree();
+  const glowTexture = useMemo(
+    () =>
+      createRadialGlowTexture(
+        skyStyle.key === 'night' ? 'rgba(210,229,255,0.58)' : 'rgba(255,231,176,0.7)',
+      ),
+    [skyStyle.key],
+  );
+
+  useEffect(
+    () => () => {
+      glowTexture?.dispose();
+    },
+    [glowTexture],
+  );
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+
+    const elapsed = clock.getElapsedTime();
+    const aspect = size.width / size.height;
+    const z = FAR_Z + 38;
+    const distanceToCamera = camera.position.z - z;
+    const fov = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const viewWidth = viewHeight * aspect;
+    const orb = skyStyle.key === 'night' ? { x: 0.43, y: 0.38 } : skyStyle.key === 'sunset' ? { x: -0.42, y: -0.08 } : skyStyle.key === 'dawn' ? { x: -0.34, y: 0.05 } : { x: 0.48, y: 0.42 };
+    const floatY = reducedMotion ? 0 : Math.sin(elapsed * 0.018) * 0.35;
+
+    groupRef.current.position.set(
+      camera.position.x + orb.x * viewWidth * 0.5,
+      camera.position.y + orb.y * viewHeight * 0.5 + floatY,
+      z,
+    );
+
+    const diskScale = skyStyle.key === 'night' ? 3.0 : 3.7;
+    const glowScale = skyStyle.key === 'night' ? 13 : 19;
+    if (diskRef.current) diskRef.current.scale.setScalar(diskScale);
+    if (glowRef.current) glowRef.current.scale.setScalar(glowScale);
+  });
+
+  return (
+    <group ref={groupRef} renderOrder={-70}>
+      <mesh ref={glowRef} raycast={nullRaycast}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          transparent
+          opacity={skyStyle.key === 'night' ? 0.48 : 0.62}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh ref={diskRef} raycast={nullRaycast}>
+        <circleGeometry args={[0.5, 64]} />
+        <meshBasicMaterial
+          color={skyStyle.key === 'night' ? '#e8f2ff' : '#ffe8a8'}
+          transparent
+          opacity={skyStyle.key === 'night' ? 0.78 : 0.88}
+          depthWrite={false}
+          depthTest={false}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function SkyParticles({ count, reducedMotion, skyStyle }) {
   const pointsRef = useRef();
+  const materialRef = useRef();
   const geometry = useMemo(() => {
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
@@ -1675,21 +2437,27 @@ function StarField({ count, reducedMotion }) {
     return buffer;
   }, [count]);
 
-  useFrame((_, delta) => {
-    if (!pointsRef.current || reducedMotion) return;
-    pointsRef.current.rotation.z += delta * 0.004;
+  useFrame(({ clock }, delta) => {
+    if (!pointsRef.current) return;
+    if (!reducedMotion) pointsRef.current.rotation.z += delta * 0.004;
+    if (materialRef.current) {
+      const twinkle = reducedMotion ? 1 : 0.88 + Math.sin(clock.getElapsedTime() * 0.7) * 0.12;
+      const nightOpacity = skyStyle.key === 'night' ? skyStyle.particleOpacity * twinkle : 0;
+      materialRef.current.opacity = nightOpacity;
+    }
   });
 
   return (
-    <points ref={pointsRef} geometry={geometry} frustumCulled={false}>
+    <points ref={pointsRef} geometry={geometry} frustumCulled={false} raycast={nullRaycast}>
       <pointsMaterial
-        size={0.055}
+        ref={materialRef}
+        size={0.07}
         sizeAttenuation
         vertexColors
         transparent
-        opacity={0.56}
+        opacity={skyStyle.key === 'night' ? skyStyle.particleOpacity : 0}
         depthWrite={false}
-        blending={THREE.AdditiveBlending}
+        blending={skyStyle.key === 'night' ? THREE.AdditiveBlending : THREE.NormalBlending}
       />
     </points>
   );
@@ -1753,7 +2521,7 @@ function BurstEcho({ interactionRef }) {
   });
 
   return (
-    <mesh ref={ringRef} visible={false}>
+    <mesh ref={ringRef} visible={false} raycast={nullRaycast}>
       <ringGeometry args={[0.18, 0.23, 96]} />
       <meshBasicMaterial
         ref={materialRef}
@@ -1768,33 +2536,364 @@ function BurstEcho({ interactionRef }) {
   );
 }
 
-function Scene({ tier, interactionRef }) {
+function WishVessel({ depositRef, reducedMotion }) {
+  const groupRef = useRef();
+  const rimRef = useRef();
+  const glowRef = useRef();
+  const glassRef = useRef();
+  const { camera, size } = useThree();
+  const bowlGeometry = useMemo(() => {
+    const profile = [
+      new THREE.Vector2(0.34, -0.72),
+      new THREE.Vector2(0.52, -0.58),
+      new THREE.Vector2(0.86, -0.24),
+      new THREE.Vector2(1.02, 0.16),
+      new THREE.Vector2(0.92, 0.54),
+    ];
+    const geometry = new THREE.LatheGeometry(profile, 72);
+    geometry.computeVertexNormals();
+    return geometry;
+  }, []);
+  const highlightGeometries = useMemo(() => {
+    const makeTube = (points, radius) => {
+      const curve = new THREE.CatmullRomCurve3(points.map((point) => new THREE.Vector3(...point)));
+      return new THREE.TubeGeometry(curve, 28, radius, 8, false);
+    };
+
+    return [
+      makeTube(
+        [
+          [-0.54, 0.38, 0.58],
+          [-0.72, 0.08, 0.7],
+          [-0.64, -0.34, 0.58],
+          [-0.36, -0.62, 0.34],
+        ],
+        0.012,
+      ),
+      makeTube(
+        [
+          [0.46, 0.3, 0.62],
+          [0.62, -0.02, 0.66],
+          [0.52, -0.38, 0.52],
+        ],
+        0.008,
+      ),
+    ];
+  }, []);
+
+  useEffect(
+    () => () => {
+      bowlGeometry.dispose();
+      for (let i = 0; i < highlightGeometries.length; i += 1) {
+        highlightGeometries[i].dispose();
+      }
+    },
+    [bowlGeometry, highlightGeometries],
+  );
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+
+    const aspect = size.width / size.height;
+    const mobile = size.width < 720;
+    const z = mobile ? 4.8 : 3.8;
+    const distanceToCamera = camera.position.z - z;
+    const fov = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const viewWidth = viewHeight * aspect;
+    const scale = mobile ? 1.24 : 1.72;
+    const x = camera.position.x + (mobile ? 0.42 : 0.64) * viewWidth * 0.5;
+    const y = camera.position.y - (mobile ? 0.58 : 0.58) * viewHeight * 0.5;
+    const vessel = depositRef.current;
+
+    groupRef.current.position.set(x, y, z);
+    groupRef.current.scale.setScalar(scale);
+    groupRef.current.rotation.set(0.04, -0.18, 0.02);
+
+    vessel.centerX = x;
+    vessel.centerY = y;
+    vessel.centerZ = z;
+    vessel.scale = scale;
+    vessel.mouthX = x;
+    vessel.mouthY = y + 0.52 * scale;
+    vessel.mouthZ = z + 0.02 * scale;
+    vessel.worldRadiusX = 1.0 * scale;
+    vessel.worldRadiusY = 0.44 * scale;
+    vessel.worldRadiusZ = 0.82 * scale;
+
+    const mouthDistance = camera.position.z - vessel.mouthZ;
+    const mouthViewHeight = 2 * Math.tan(fov / 2) * mouthDistance;
+    const mouthViewWidth = mouthViewHeight * aspect;
+    vessel.dropX = (vessel.mouthX - camera.position.x) / (mouthViewWidth * 0.5);
+    vessel.dropY = (vessel.mouthY - camera.position.y) / (mouthViewHeight * 0.5);
+    vessel.radiusX = mobile ? 0.28 : 0.19;
+    vessel.radiusY = mobile ? 0.2 : 0.14;
+    vessel.pulse = Math.max(0, (vessel.pulse ?? 0) - delta * (reducedMotion ? 1.25 : 1.8));
+
+    const glow = vessel.hovered ? 1 : vessel.pulse;
+    if (rimRef.current?.material) {
+      rimRef.current.material.opacity = 0.42 + glow * 0.38;
+      rimRef.current.material.emissiveIntensity = 0.1 + glow * 0.72;
+    }
+    if (glowRef.current?.material) {
+      glowRef.current.material.opacity = (vessel.hovered ? 0.24 : 0.1) + glow * 0.2;
+      glowRef.current.scale.setScalar(1 + glow * 0.08);
+    }
+    if (glassRef.current?.material) {
+      glassRef.current.material.opacity = 0.24 + glow * 0.045;
+    }
+  });
+
+  return (
+    <group ref={groupRef} renderOrder={2}>
+      <mesh ref={glassRef} geometry={bowlGeometry} raycast={nullRaycast}>
+        <meshPhysicalMaterial
+          color="#e6fbff"
+          transparent
+          opacity={0.24}
+          roughness={0.02}
+          metalness={0}
+          clearcoat={1}
+          clearcoatRoughness={0.08}
+          transmission={0.58}
+          thickness={0.36}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <mesh ref={rimRef} position={[0, 0.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.08, 0.72, 1]} raycast={nullRaycast}>
+        <torusGeometry args={[0.9, 0.052, 16, 96]} />
+        <meshStandardMaterial
+          color="#eefcff"
+          emissive="#b9f8ff"
+          emissiveIntensity={0.1}
+          roughness={0.18}
+          metalness={0}
+          transparent
+          opacity={0.42}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh position={[0, 0.5, -0.08]} rotation={[Math.PI / 2, 0, 0]} scale={[1.04, 0.64, 1]} raycast={nullRaycast}>
+        <torusGeometry args={[0.86, 0.018, 10, 96]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+      <mesh ref={glowRef} position={[0, 0.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.12, 0.76, 1]} raycast={nullRaycast}>
+        <torusGeometry args={[0.98, 0.026, 10, 96]} />
+        <meshBasicMaterial
+          color="#fff5cf"
+          transparent
+          opacity={0.1}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      <mesh position={[0, -0.7, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.0, 0.72, 1]} raycast={nullRaycast}>
+        <torusGeometry args={[0.36, 0.036, 12, 72]} />
+        <meshStandardMaterial color="#d9f6ff" transparent opacity={0.26} roughness={0.12} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, -0.83, 0.03]} rotation={[Math.PI / 2, 0, 0]} scale={[1.28, 0.72, 1]} raycast={nullRaycast}>
+        <circleGeometry args={[0.78, 72]} />
+        <meshBasicMaterial color="#315c75" transparent opacity={0.12} depthWrite={false} />
+      </mesh>
+      {highlightGeometries.map((geometry, index) => (
+        <mesh key={index} geometry={geometry} raycast={nullRaycast}>
+          <meshBasicMaterial
+            color="#ffffff"
+            transparent
+            opacity={index === 0 ? 0.34 : 0.24}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky }) {
+  const skyStyle = SKY_STYLES[sky.phase] ?? SKY_STYLES.day;
+
   return (
     <>
-      <color attach="background" args={['#050306']} />
-      <fog attach="fog" args={['#050306', 28, 158]} />
+      <color attach="background" args={[skyStyle.horizon]} />
+      <fog attach="fog" args={[skyStyle.fog, 32, 162]} />
 
-      <ambientLight intensity={0.82} />
-      <hemisphereLight args={['#fff2df', '#130b12', 1.45]} />
-      <directionalLight position={[5.5, 9, 14]} intensity={2.65} color="#fff1d8" />
-      <directionalLight position={[-7, 2, -12]} intensity={0.72} color="#b5fff0" />
-      <pointLight position={[-9, -3, 12]} intensity={2.0} color="#7cefd9" distance={48} />
-      <pointLight position={[10, 7, -24]} intensity={1.25} color="#ffb7aa" distance={76} />
+      <ambientLight intensity={skyStyle.ambient} />
+      <hemisphereLight args={[skyStyle.hemiSky, skyStyle.hemiGround, skyStyle.hemiIntensity]} />
+      <directionalLight position={[5.5, 9, 14]} intensity={skyStyle.sunIntensity} color={skyStyle.sun} />
+      <directionalLight position={[-7, 2, -12]} intensity={skyStyle.rimIntensity} color={skyStyle.rim} />
+      <pointLight position={[-9, -3, 12]} intensity={1.1} color="#ffffff" distance={46} />
+      <pointLight position={[10, 7, -24]} intensity={0.74} color={skyStyle.rim} distance={76} />
 
       <CameraRig interactionRef={interactionRef} reducedMotion={tier.reducedMotion} />
-      <StarField count={tier.particles} reducedMotion={tier.reducedMotion} />
+      <SkyBackdrop skyStyle={skyStyle} />
+      <SkyOrb skyStyle={skyStyle} reducedMotion={tier.reducedMotion} />
+      <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={0} />
+      <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={1} />
+      <SkyParticles count={tier.particles} reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
+      <WishVessel depositRef={depositRef} reducedMotion={tier.reducedMotion} />
       <CraneField
         count={tier.cranes}
         reducedMotion={tier.reducedMotion}
         interactionRef={interactionRef}
+        depositRef={depositRef}
+        pickingRef={pickingRef}
+        onDeposit={onDeposit}
       />
       <BurstEcho interactionRef={interactionRef} />
     </>
   );
 }
 
+function ClockDisplay({ clock }) {
+  return (
+    <div className="gmt-clock" aria-label="Date and time in GMT plus seven">
+      <span className="clock-zone">GMT+7</span>
+      <time dateTime={`${clock.dateLabel} ${clock.timeLabel}`}>
+        <span>{clock.timeLabel}</span>
+        <span>{clock.dateLabel}</span>
+      </time>
+    </div>
+  );
+}
+
+function PaperNote({ note, onClose }) {
+  useEffect(() => {
+    if (!note) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [note, onClose]);
+
+  if (!note) return null;
+
+  const colorConfig = getCraneColorConfig(Number(note.colorType));
+
+  return (
+    <div className="note-backdrop" role="presentation" onPointerDown={onClose}>
+      <article
+        className={`paper-note ${colorConfig.noteClass}`}
+        aria-label="Deposited crane message"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <button className="note-close" type="button" aria-label="Close note" onClick={onClose}>
+          x
+        </button>
+        <div className="note-folds" aria-hidden="true" />
+        <p className="note-meta">
+          {note.colorLabel} crane - {note.depositedAtGMT7Display}
+        </p>
+        <p className="note-message">{note.message}</p>
+      </article>
+    </div>
+  );
+}
+
+function HistorySidebar({ open, history, onClose, onClear }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
+  const groups = useMemo(
+    () =>
+      CRANE_COLOR_CONFIG.map((config) => ({
+        config,
+        items: history.filter((entry) => Number(entry.colorType) === config.type),
+      })),
+    [history],
+  );
+
+  return (
+    <>
+      <div
+        className={`sidebar-scrim ${open ? 'is-open' : ''}`}
+        aria-hidden="true"
+        onPointerDown={onClose}
+      />
+      <aside className={`history-sidebar ${open ? 'is-open' : ''}`} aria-hidden={!open}>
+        <div className="sidebar-header">
+          <div>
+            <p className="sidebar-kicker">Wish vessel</p>
+            <h2>History</h2>
+          </div>
+          <button className="sidebar-close" type="button" aria-label="Close history" onClick={onClose}>
+            x
+          </button>
+        </div>
+
+        {history.length > 0 ? (
+          <button className="history-clear" type="button" onClick={onClear}>
+            Clear history
+          </button>
+        ) : null}
+
+        <div className="history-groups">
+          {groups.map(({ config, items }) => (
+            <section className="history-group" key={config.key}>
+              <header>
+                <span className={`history-swatch swatch-${config.key}`} aria-hidden="true" />
+                <span>{config.label}</span>
+                <span>{items.length}</span>
+              </header>
+              {items.length > 0 ? (
+                items.map((entry) => (
+                  <article className="history-item" key={entry.id}>
+                    <p>{entry.message}</p>
+                    <time dateTime={entry.depositedAtISO}>{entry.depositedAtGMT7Display}</time>
+                  </article>
+                ))
+              ) : (
+                <p className="history-empty">No wishes yet.</p>
+              )}
+            </section>
+          ))}
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export default function App() {
   const tier = usePerformanceTier();
+  const clock = useGMT7Clock();
+  const depositRef = useRef({
+    hovered: false,
+    hoveredIndex: -1,
+    nextSlot: 0,
+    pulse: 0,
+    centerX: 8.4,
+    centerY: -5.5,
+    centerZ: 3.8,
+    mouthX: 8.4,
+    mouthY: -4.5,
+    mouthZ: 3.8,
+    dropX: 0.65,
+    dropY: -0.62,
+    radiusX: 0.16,
+    radiusY: 0.12,
+    worldRadiusX: 1.4,
+    worldRadiusY: 0.7,
+    worldRadiusZ: 1.2,
+    scale: 1.7,
+  });
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [activeNote, setActiveNote] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pickingRef = useRef({
+    pickCraneFromPointer: null,
+  });
   const interactionRef = useRef({
     active: false,
     x: 0,
@@ -1811,6 +2910,24 @@ export default function App() {
     grabbedPointerId: -1,
     grabReleaseRequested: false,
   });
+
+  useEffect(() => {
+    setHistoryEntries(historyStorage.list());
+  }, []);
+
+  const handleDeposit = useCallback((payload) => {
+    const entry = createHistoryEntry(payload);
+    setHistoryEntries(historyStorage.add(entry));
+    setActiveNote(entry);
+  }, []);
+
+  const closeNote = useCallback(() => {
+    setActiveNote(null);
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    setHistoryEntries(historyStorage.clear());
+  }, []);
 
   const updateInteraction = useCallback((event) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1845,6 +2962,10 @@ export default function App() {
         return;
       }
 
+      if (pickingRef.current.pickCraneFromPointer?.(event)) {
+        return;
+      }
+
       updateInteraction(event);
       requestAnimationFrame(() => {
         const interaction = interactionRef.current;
@@ -1876,6 +2997,41 @@ export default function App() {
     interaction.vy = 0;
   }, []);
 
+  useEffect(() => {
+    const canvas = document.querySelector('.flight-canvas');
+    if (!canvas) return undefined;
+
+    const handleNativePointerDown = (event) => {
+      if (interactionRef.current.isGrabbing) {
+        updateInteraction(event);
+        return;
+      }
+
+      if (pickingRef.current.pickCraneFromPointer?.(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      triggerBurst(event);
+      event.stopPropagation();
+    };
+
+    canvas.addEventListener('pointerdown', handleNativePointerDown, true);
+    canvas.addEventListener('pointermove', updateInteraction);
+    canvas.addEventListener('pointerup', releaseGrabInteraction);
+    canvas.addEventListener('pointercancel', releaseGrabInteraction);
+    canvas.addEventListener('pointerleave', releaseGrabInteraction);
+
+    return () => {
+      canvas.removeEventListener('pointerdown', handleNativePointerDown, true);
+      canvas.removeEventListener('pointermove', updateInteraction);
+      canvas.removeEventListener('pointerup', releaseGrabInteraction);
+      canvas.removeEventListener('pointercancel', releaseGrabInteraction);
+      canvas.removeEventListener('pointerleave', releaseGrabInteraction);
+    };
+  }, [releaseGrabInteraction, triggerBurst, updateInteraction]);
+
   return (
     <main className="experience" aria-label="A Thousand Paper Cranes immersive 3D artwork">
       <Canvas
@@ -1894,14 +3050,40 @@ export default function App() {
         onPointerCancel={releaseGrabInteraction}
         onPointerLeave={releaseGrabInteraction}
       >
-        <Scene tier={tier} interactionRef={interactionRef} />
+        <Scene
+          tier={tier}
+          interactionRef={interactionRef}
+          depositRef={depositRef}
+          pickingRef={pickingRef}
+          onDeposit={handleDeposit}
+          sky={clock}
+        />
       </Canvas>
 
+      <button
+        className="menu-button"
+        type="button"
+        aria-label="Open wish history"
+        aria-expanded={sidebarOpen}
+        onClick={() => setSidebarOpen(true)}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
+      <ClockDisplay clock={clock} />
       <section className="title-layer" aria-label="Experience title">
         <p className="kicker">Interactive WebGL Artwork</p>
         <h1>A Thousand Paper Cranes</h1>
-        <p className="instruction">Move your cursor to guide the flock. Tap to send a ripple.</p>
+        <p className="instruction">Move through the flock. Hold a crane and release it into the vessel.</p>
       </section>
+      <HistorySidebar
+        open={sidebarOpen}
+        history={historyEntries}
+        onClose={() => setSidebarOpen(false)}
+        onClear={clearHistory}
+      />
+      <PaperNote note={activeNote} onClose={closeNote} />
       <div className="vignette" aria-hidden="true" />
     </main>
   );
