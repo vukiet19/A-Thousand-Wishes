@@ -76,72 +76,161 @@ const WISH_MESSAGES = [
   'A thousand small chances to begin again.',
 ];
 
-const SKY_STYLES = {
-  dawn: {
-    key: 'dawn',
-    top: '#7daee5',
-    middle: '#efb7ca',
-    horizon: '#ffe3ad',
-    fog: '#cfd9e9',
-    ambient: 0.78,
-    hemiSky: '#fff1da',
-    hemiGround: '#7c8ea9',
-    hemiIntensity: 1.18,
-    sun: '#ffe0a8',
-    sunIntensity: 2.45,
-    rim: '#ffbfd2',
-    rimIntensity: 0.72,
-    particleOpacity: 0.22,
-  },
-  day: {
-    key: 'day',
-    top: '#73b9e9',
-    middle: '#bfe8fb',
-    horizon: '#fff2d4',
-    fog: '#cfeaf5',
-    ambient: 0.92,
-    hemiSky: '#f5fbff',
-    hemiGround: '#94b7c8',
-    hemiIntensity: 1.38,
-    sun: '#fff0c8',
-    sunIntensity: 2.75,
-    rim: '#b9e9ff',
-    rimIntensity: 0.58,
-    particleOpacity: 0.16,
-  },
-  sunset: {
-    key: 'sunset',
-    top: '#6576b5',
-    middle: '#ed9fa7',
-    horizon: '#ffd08f',
-    fog: '#d8b8c6',
-    ambient: 0.74,
-    hemiSky: '#ffe2c4',
-    hemiGround: '#766d99',
-    hemiIntensity: 1.16,
-    sun: '#ffbe7d',
-    sunIntensity: 2.35,
-    rim: '#ff9ea7',
-    rimIntensity: 0.92,
-    particleOpacity: 0.2,
-  },
-  night: {
-    key: 'night',
-    top: '#273b65',
-    middle: '#49678f',
-    horizon: '#8ea7c5',
-    fog: '#637d9e',
-    ambient: 0.62,
-    hemiSky: '#d9eaff',
-    hemiGround: '#2c3657',
-    hemiIntensity: 0.96,
-    sun: '#d6e7ff',
-    sunIntensity: 1.5,
-    rim: '#abc9ff',
+const SKY_KEYFRAMES = [
+  {
+    hour: 0,
+    top: '#071226',
+    middle: '#10234a',
+    horizon: '#243b63',
+    fog: '#172a4b',
+    ambient: 0.2,
+    hemiSky: '#8eaddf',
+    hemiGround: '#07101f',
+    hemiIntensity: 0.48,
+    sun: '#cfe2ff',
+    sunIntensity: 0.22,
+    rim: '#7ea7e9',
     rimIntensity: 0.68,
-    particleOpacity: 0.24,
+    cloudColor: '#cfdaf0',
+    cloudOpacity: 0.32,
   },
-};
+  {
+    hour: 5.15,
+    top: '#142b55',
+    middle: '#315383',
+    horizon: '#e2a87a',
+    fog: '#657a9a',
+    ambient: 0.38,
+    hemiSky: '#bacfe8',
+    hemiGround: '#273651',
+    hemiIntensity: 0.72,
+    sun: '#ffd0a4',
+    sunIntensity: 0.9,
+    rim: '#ffb3a2',
+    rimIntensity: 0.78,
+    cloudColor: '#f4d6cb',
+    cloudOpacity: 0.54,
+  },
+  {
+    hour: 6.35,
+    top: '#6fa8dd',
+    middle: '#edb4c7',
+    horizon: '#ffe1a8',
+    fog: '#c9d7e7',
+    ambient: 0.72,
+    hemiSky: '#fff0d7',
+    hemiGround: '#7b8ea7',
+    hemiIntensity: 1.06,
+    sun: '#ffd9a2',
+    sunIntensity: 2.05,
+    rim: '#ffc1c4',
+    rimIntensity: 0.78,
+    cloudColor: '#fff2e6',
+    cloudOpacity: 0.82,
+  },
+  {
+    hour: 9,
+    top: '#62b4ed',
+    middle: '#bdeafb',
+    horizon: '#f8f2dc',
+    fog: '#cdeafa',
+    ambient: 0.9,
+    hemiSky: '#f7fcff',
+    hemiGround: '#9bbccc',
+    hemiIntensity: 1.34,
+    sun: '#fff0bd',
+    sunIntensity: 2.7,
+    rim: '#bcecff',
+    rimIntensity: 0.56,
+    cloudColor: '#ffffff',
+    cloudOpacity: 0.95,
+  },
+  {
+    hour: 15.8,
+    top: '#78bde9',
+    middle: '#c7eafa',
+    horizon: '#fff1d2',
+    fog: '#d2e8f1',
+    ambient: 0.86,
+    hemiSky: '#f7fbff',
+    hemiGround: '#9fb4c0',
+    hemiIntensity: 1.22,
+    sun: '#ffe0a4',
+    sunIntensity: 2.35,
+    rim: '#ffd6a6',
+    rimIntensity: 0.7,
+    cloudColor: '#fff8ee',
+    cloudOpacity: 0.88,
+  },
+  {
+    hour: 18.15,
+    top: '#5868aa',
+    middle: '#e99aa3',
+    horizon: '#ffc16f',
+    fog: '#c9a9ba',
+    ambient: 0.62,
+    hemiSky: '#ffd9bd',
+    hemiGround: '#67618c',
+    hemiIntensity: 0.96,
+    sun: '#ffac65',
+    sunIntensity: 1.8,
+    rim: '#ff9aa0',
+    rimIntensity: 0.95,
+    cloudColor: '#ffd4bd',
+    cloudOpacity: 0.8,
+  },
+  {
+    hour: 19.45,
+    top: '#152850',
+    middle: '#304c7a',
+    horizon: '#8d6b7e',
+    fog: '#495d7c',
+    ambient: 0.38,
+    hemiSky: '#9fb9dc',
+    hemiGround: '#20283d',
+    hemiIntensity: 0.68,
+    sun: '#dbe8ff',
+    sunIntensity: 0.55,
+    rim: '#a9c5ff',
+    rimIntensity: 0.82,
+    cloudColor: '#d7dced',
+    cloudOpacity: 0.46,
+  },
+  {
+    hour: 21.2,
+    top: '#071226',
+    middle: '#10234a',
+    horizon: '#1d355f',
+    fog: '#182c4d',
+    ambient: 0.2,
+    hemiSky: '#86a9dc',
+    hemiGround: '#07101f',
+    hemiIntensity: 0.5,
+    sun: '#d8e8ff',
+    sunIntensity: 0.25,
+    rim: '#86aff5',
+    rimIntensity: 0.72,
+    cloudColor: '#cbd6ee',
+    cloudOpacity: 0.34,
+  },
+  {
+    hour: 24,
+    top: '#071226',
+    middle: '#10234a',
+    horizon: '#243b63',
+    fog: '#172a4b',
+    ambient: 0.2,
+    hemiSky: '#8eaddf',
+    hemiGround: '#07101f',
+    hemiIntensity: 0.48,
+    sun: '#cfe2ff',
+    sunIntensity: 0.22,
+    rim: '#7ea7e9',
+    rimIntensity: 0.68,
+    cloudColor: '#cfdaf0',
+    cloudOpacity: 0.32,
+  },
+];
 
 const random = (min, max) => min + Math.random() * (max - min);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -151,6 +240,11 @@ const nullRaycast = () => null;
 const smoothstep = (edge0, edge1, value) => {
   const t = clamp01((value - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
+};
+const lerp = (start, end, amount) => start + (end - start) * amount;
+const mixColor = (from, to, amount) => {
+  const color = new THREE.Color(from).lerp(new THREE.Color(to), clamp01(amount));
+  return `#${color.getHexString()}`;
 };
 const easeInOutSine = (value) => -(Math.cos(Math.PI * clamp01(value)) - 1) * 0.5;
 const easeOutCubic = (value) => 1 - (1 - clamp01(value)) ** 3;
@@ -173,15 +267,56 @@ const wingbeatCurve = (cycle) => {
   return 1 - easeInOutSine((t - 0.88) / 0.12) * 0.03;
 };
 
-const getCraneColorType = (index, count) => {
-  const whiteEnd = Math.floor(count * 0.3);
-  const redEnd = whiteEnd + Math.floor(count * 0.3);
-  if (index < whiteEnd) return CRANE_WHITE;
-  if (index < redEnd) return CRANE_RED;
-  return CRANE_BLUE;
+const getCraneColorConfig = (colorType) => CRANE_COLOR_CONFIG[colorType] ?? CRANE_COLOR_CONFIG[0];
+
+const hashUint32 = (value) => {
+  let x = value | 0;
+  x = Math.imul(x ^ (x >>> 16), 0x7feb352d);
+  x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
+  return (x ^ (x >>> 16)) >>> 0;
 };
 
-const getCraneColorConfig = (colorType) => CRANE_COLOR_CONFIG[colorType] ?? CRANE_COLOR_CONFIG[0];
+const getLayerColorCounts = (count) => {
+  const quotas = [
+    { type: CRANE_WHITE, base: Math.floor(count * 0.3), remainder: count * 0.3 - Math.floor(count * 0.3) },
+    { type: CRANE_RED, base: Math.floor(count * 0.3), remainder: count * 0.3 - Math.floor(count * 0.3) },
+    { type: CRANE_BLUE, base: Math.floor(count * 0.4), remainder: count * 0.4 - Math.floor(count * 0.4) },
+  ];
+  let assigned = quotas[0].base + quotas[1].base + quotas[2].base;
+  quotas.sort((a, b) => b.remainder - a.remainder || b.type - a.type);
+  for (let i = 0; assigned < count; i += 1, assigned += 1) {
+    quotas[i % quotas.length].base += 1;
+  }
+
+  return {
+    [CRANE_WHITE]: quotas.find((entry) => entry.type === CRANE_WHITE).base,
+    [CRANE_RED]: quotas.find((entry) => entry.type === CRANE_RED).base,
+    [CRANE_BLUE]: quotas.find((entry) => entry.type === CRANE_BLUE).base,
+  };
+};
+
+const assignColorTypesForRange = (data, start, end) => {
+  const count = Math.max(0, end - start);
+  if (count <= 0) return;
+
+  const counts = getLayerColorCounts(count);
+  const colors = [];
+  for (let i = 0; i < counts[CRANE_WHITE]; i += 1) colors.push(CRANE_WHITE);
+  for (let i = 0; i < counts[CRANE_RED]; i += 1) colors.push(CRANE_RED);
+  for (let i = 0; i < counts[CRANE_BLUE]; i += 1) colors.push(CRANE_BLUE);
+
+  for (let i = colors.length - 1; i > 0; i -= 1) {
+    const seed = hashUint32((start + 1) * 73856093 + (end + 1) * 19349663 + (i + 1) * 83492791);
+    const j = seed % (i + 1);
+    const temp = colors[i];
+    colors[i] = colors[j];
+    colors[j] = temp;
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    data.colorType[start + i] = colors[i];
+  }
+};
 
 const getGMT7Parts = (date = new Date()) => {
   const shifted = new Date(date.getTime() + GMT7_OFFSET_MS);
@@ -211,6 +346,92 @@ const getSkyPhase = (parts) => {
   if (hour >= 7.25 && hour < 16.75) return 'day';
   if (hour >= 16.75 && hour < 18.85) return 'sunset';
   return 'night';
+};
+
+const getSkyTimeHours = (parts) => parts.hours + parts.minutes / 60 + parts.seconds / 3600;
+
+const getSkyPreviewTimeHours = () => {
+  if (typeof window === 'undefined') return null;
+
+  const value = new URLSearchParams(window.location.search).get('skyTime');
+  if (!value) return null;
+  const match = value.trim().match(/^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2] ?? 0);
+  const seconds = Number(match[3] ?? 0);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) return null;
+  return hours + minutes / 60 + seconds / 3600;
+};
+
+const getSkyKeyframesForTime = (timeHours) => {
+  const time = ((timeHours % 24) + 24) % 24;
+  for (let i = 0; i < SKY_KEYFRAMES.length - 1; i += 1) {
+    const current = SKY_KEYFRAMES[i];
+    const next = SKY_KEYFRAMES[i + 1];
+    if (time >= current.hour && time <= next.hour) {
+      const amount = smoothstep(0, 1, (time - current.hour) / Math.max(0.001, next.hour - current.hour));
+      return { current, next, amount };
+    }
+  }
+
+  return { current: SKY_KEYFRAMES[0], next: SKY_KEYFRAMES[1], amount: 0 };
+};
+
+const getContinuousSkyState = (timeHours) => {
+  const time = ((timeHours % 24) + 24) % 24;
+  const { current, next, amount } = getSkyKeyframesForTime(time);
+  const sunT = clamp01((time - 5.35) / 13.35);
+  const sunArc = Math.sin(Math.PI * sunT);
+  const sunVisibility = smoothstep(5.05, 6.45, time) * (1 - smoothstep(18.35, 19.2, time));
+  const moonT = time >= 18 ? (time - 18) / 12 : (time + 6) / 12;
+  const moonArc = Math.sin(Math.PI * clamp01(moonT));
+  const eveningStars = smoothstep(18.9, 21.1, time);
+  const morningStars = 1 - smoothstep(4.7, 6.25, time);
+  const starOpacity = Math.max(eveningStars, morningStars) * 0.86;
+  const twilight =
+    smoothstep(4.85, 6.55, time) * (1 - smoothstep(6.55, 8.0, time)) +
+    smoothstep(16.9, 18.6, time) * (1 - smoothstep(18.6, 20.2, time));
+  const night = Math.max(smoothstep(19.25, 21.0, time), 1 - smoothstep(4.6, 6.05, time));
+  const moonVisibility = clamp01(night * 0.95 + twilight * 0.22);
+
+  return {
+    key: getSkyPhase({
+      hours: Math.floor(time),
+      minutes: Math.floor((time % 1) * 60),
+      seconds: 0,
+    }),
+    timeHours: time,
+    dayProgress: time / 24,
+    top: mixColor(current.top, next.top, amount),
+    middle: mixColor(current.middle, next.middle, amount),
+    horizon: mixColor(current.horizon, next.horizon, amount),
+    fog: mixColor(current.fog, next.fog, amount),
+    ambient: lerp(current.ambient, next.ambient, amount),
+    hemiSky: mixColor(current.hemiSky, next.hemiSky, amount),
+    hemiGround: mixColor(current.hemiGround, next.hemiGround, amount),
+    hemiIntensity: lerp(current.hemiIntensity, next.hemiIntensity, amount),
+    sun: mixColor(current.sun, next.sun, amount),
+    sunIntensity: lerp(current.sunIntensity, next.sunIntensity, amount) * (0.28 + sunVisibility * 0.72),
+    rim: mixColor(current.rim, next.rim, amount),
+    rimIntensity: lerp(current.rimIntensity, next.rimIntensity, amount),
+    cloudColor: mixColor(current.cloudColor, next.cloudColor, amount),
+    cloudOpacity: lerp(current.cloudOpacity, next.cloudOpacity, amount),
+    sunVisibility,
+    moonVisibility,
+    starOpacity,
+    night,
+    twilight: clamp01(twilight),
+    sunPosition: {
+      x: lerp(-0.78, 0.82, sunT),
+      y: -0.16 + sunArc * 0.78,
+    },
+    moonPosition: {
+      x: lerp(0.86, -0.78, clamp01(moonT)),
+      y: -0.1 + moonArc * 0.72,
+    },
+  };
 };
 
 const createHistoryEntry = ({ craneIndex, colorType, message }) => {
@@ -286,9 +507,16 @@ function useGMT7Clock() {
 
   return useMemo(() => {
     const parts = getGMT7Parts(now);
+    const previewTimeHours = getSkyPreviewTimeHours();
+    const skyTimeHours = previewTimeHours ?? getSkyTimeHours(parts);
+    const skyStyle = getContinuousSkyState(skyTimeHours);
     return {
       parts,
-      phase: getSkyPhase(parts),
+      phase: skyStyle.key,
+      skyTimeHours,
+      dayProgress: skyStyle.dayProgress,
+      skyStyle,
+      previewTimeHours,
       dateLabel: `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`,
       timeLabel: `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`,
     };
@@ -434,7 +662,7 @@ function createPaperTextures() {
 function createSkyTexture(skyStyle) {
   if (typeof document === 'undefined') return null;
 
-  const width = 64;
+  const width = 96;
   const height = 512;
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -447,41 +675,41 @@ function createSkyTexture(skyStyle) {
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
 
-  const glowY = skyStyle.key === 'night' ? height * 0.28 : height * 0.72;
-  const glowX = skyStyle.key === 'sunset' ? width * 0.18 : width * 0.78;
-  const glow = context.createRadialGradient(glowX, glowY, 0, glowX, glowY, height * 0.42);
-  glow.addColorStop(0, skyStyle.key === 'night' ? 'rgba(222,236,255,0.4)' : 'rgba(255,244,210,0.54)');
-  glow.addColorStop(0.46, skyStyle.key === 'night' ? 'rgba(160,190,245,0.13)' : 'rgba(255,210,160,0.2)');
+  const sunX = width * (0.5 + skyStyle.sunPosition.x * 0.36);
+  const sunY = height * (0.5 - skyStyle.sunPosition.y * 0.42);
+  const glow = context.createRadialGradient(sunX, sunY, 0, sunX, sunY, height * 0.42);
+  glow.addColorStop(0, `rgba(255,239,195,${0.46 * skyStyle.sunVisibility})`);
+  glow.addColorStop(0.45, `rgba(255,202,145,${0.18 * skyStyle.sunVisibility})`);
   glow.addColorStop(1, 'rgba(255,255,255,0)');
   context.fillStyle = glow;
   context.fillRect(0, 0, width, height);
 
-  context.globalAlpha = skyStyle.key === 'night' ? 0.08 : 0.34;
-  for (let cluster = 0; cluster < 7; cluster += 1) {
-    const cx = width * random(-0.15, 1.15);
-    const cy = height * random(0.18, 0.72);
-    const radius = random(18, 46);
-    const cloud = context.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    cloud.addColorStop(0, 'rgba(255,255,255,0.46)');
-    cloud.addColorStop(0.52, 'rgba(255,255,255,0.18)');
-    cloud.addColorStop(0.78, 'rgba(155,184,205,0.06)');
-    cloud.addColorStop(1, 'rgba(255,255,255,0)');
-    context.fillStyle = cloud;
-    context.fillRect(0, 0, width, height);
-  }
+  const moonX = width * (0.5 + skyStyle.moonPosition.x * 0.35);
+  const moonY = height * (0.5 - skyStyle.moonPosition.y * 0.42);
+  const moonGlow = context.createRadialGradient(moonX, moonY, 0, moonX, moonY, height * 0.3);
+  moonGlow.addColorStop(0, `rgba(206,226,255,${0.28 * skyStyle.moonVisibility})`);
+  moonGlow.addColorStop(0.5, `rgba(136,168,225,${0.12 * skyStyle.moonVisibility})`);
+  moonGlow.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = moonGlow;
+  context.fillRect(0, 0, width, height);
 
-  context.globalAlpha = skyStyle.key === 'day' ? 0.28 : 0.32;
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = 5;
-  for (let i = 0; i < 18; i += 1) {
-    const y = height * random(0.35, 0.92);
-    const x = random(-width * 0.4, width * 0.7);
-    context.beginPath();
-    context.moveTo(x, y);
-    context.bezierCurveTo(width * 0.26, y + random(-8, 8), width * 0.72, y + random(-10, 10), width * 1.35, y + random(-4, 4));
-    context.stroke();
-  }
-  context.globalAlpha = 1;
+  const horizonHaze = context.createLinearGradient(0, height * 0.54, 0, height);
+  horizonHaze.addColorStop(0, 'rgba(255,255,255,0)');
+  horizonHaze.addColorStop(1, `rgba(255,238,205,${0.14 * (1 - skyStyle.night) + skyStyle.twilight * 0.1})`);
+  context.fillStyle = horizonHaze;
+  context.fillRect(0, 0, width, height);
+
+  const coolHaze = context.createLinearGradient(0, height * 0.62, 0, height);
+  coolHaze.addColorStop(0, 'rgba(255,255,255,0)');
+  coolHaze.addColorStop(1, `rgba(92,128,180,${0.12 * skyStyle.night})`);
+  context.fillStyle = coolHaze;
+  context.fillRect(0, 0, width, height);
+
+  const vignette = context.createRadialGradient(width * 0.5, height * 0.48, height * 0.1, width * 0.5, height * 0.5, height * 0.78);
+  vignette.addColorStop(0, 'rgba(255,255,255,0)');
+  vignette.addColorStop(1, `rgba(4,16,36,${0.1 + skyStyle.night * 0.18})`);
+  context.fillStyle = vignette;
+  context.fillRect(0, 0, width, height);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -503,30 +731,47 @@ function createCloudTexture(seed = 1) {
   };
 
   const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 256;
+  canvas.width = 768;
+  canvas.height = 320;
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let cluster = 0; cluster < 7; cluster += 1) {
+  for (let cluster = 0; cluster < 9; cluster += 1) {
     const cx = next() * canvas.width;
-    const cy = canvas.height * (0.28 + next() * 0.48);
-    const width = canvas.width * (0.12 + next() * 0.18);
-    const height = canvas.height * (0.08 + next() * 0.16);
+    const cy = canvas.height * (0.22 + next() * 0.58);
+    const width = canvas.width * (0.16 + next() * 0.26);
+    const height = canvas.height * (0.08 + next() * 0.18);
 
-    for (let puff = 0; puff < 18; puff += 1) {
+    for (let puff = 0; puff < 28; puff += 1) {
       const px = cx + (next() - 0.5) * width;
       const py = cy + (next() - 0.5) * height;
-      const radius = canvas.width * (0.035 + next() * 0.075);
-      const alpha = 0.34 + next() * 0.34;
-      const gradient = context.createRadialGradient(px, py, 0, px, py, radius);
+      const radius = canvas.width * (0.026 + next() * 0.07);
+      const alpha = 0.36 + next() * 0.38;
+      const gradient = context.createRadialGradient(px, py, 0, px, py, radius * (1.2 + next() * 0.9));
       gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
-      gradient.addColorStop(0.46, `rgba(255,255,255,${alpha * 0.68})`);
-      gradient.addColorStop(0.78, `rgba(174,199,216,${alpha * 0.28})`);
+      gradient.addColorStop(0.42, `rgba(255,255,255,${alpha * 0.72})`);
+      gradient.addColorStop(0.68, `rgba(205,222,234,${alpha * 0.36})`);
+      gradient.addColorStop(0.84, `rgba(146,177,196,${alpha * 0.22})`);
       gradient.addColorStop(1, 'rgba(255,255,255,0)');
       context.fillStyle = gradient;
       context.fillRect(px - radius, py - radius, radius * 2, radius * 2);
     }
+
+    context.globalAlpha = 0.24 + next() * 0.18;
+    context.strokeStyle = '#ffffff';
+    context.lineWidth = canvas.height * (0.012 + next() * 0.014);
+    context.beginPath();
+    context.moveTo(cx - width * 0.58, cy + height * (0.12 + next() * 0.28));
+    context.bezierCurveTo(
+      cx - width * 0.18,
+      cy + height * (0.2 - next() * 0.24),
+      cx + width * 0.22,
+      cy + height * (0.08 + next() * 0.24),
+      cx + width * 0.64,
+      cy + height * (0.12 - next() * 0.18),
+    );
+    context.stroke();
+    context.globalAlpha = 1;
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -559,6 +804,86 @@ function createRadialGlowTexture(innerColor, outerColor = 'rgba(255,255,255,0)')
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
+}
+
+function createMoonTexture() {
+  if (typeof document === 'undefined') return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  context.clearRect(0, 0, 256, 256);
+
+  const disk = context.createRadialGradient(112, 92, 8, 128, 128, 118);
+  disk.addColorStop(0, 'rgba(255,255,255,0.98)');
+  disk.addColorStop(0.62, 'rgba(219,233,255,0.95)');
+  disk.addColorStop(1, 'rgba(162,187,230,0.86)');
+  context.fillStyle = disk;
+  context.beginPath();
+  context.arc(128, 128, 112, 0, TAU);
+  context.fill();
+
+  const craters = [
+    [90, 92, 14, 0.18],
+    [145, 76, 10, 0.12],
+    [165, 142, 18, 0.14],
+    [105, 158, 22, 0.1],
+    [135, 178, 8, 0.12],
+  ];
+  for (let i = 0; i < craters.length; i += 1) {
+    const [x, y, radius, alpha] = craters[i];
+    const crater = context.createRadialGradient(x - radius * 0.25, y - radius * 0.25, 0, x, y, radius);
+    crater.addColorStop(0, `rgba(255,255,255,${alpha * 0.75})`);
+    crater.addColorStop(0.7, `rgba(95,125,176,${alpha})`);
+    crater.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = crater;
+    context.beginPath();
+    context.arc(x, y, radius, 0, TAU);
+    context.fill();
+  }
+
+  context.globalCompositeOperation = 'destination-in';
+  context.beginPath();
+  context.arc(128, 128, 112, 0, TAU);
+  context.fillStyle = '#ffffff';
+  context.fill();
+  context.globalCompositeOperation = 'source-over';
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function createStarGeometry(count, seed = 1, spread = 1) {
+  let value = seed * 2654435761;
+  const next = () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const color = new THREE.Color();
+  for (let i = 0; i < count; i += 1) {
+    const radius = Math.pow(next(), 0.55);
+    positions[i * 3] = (next() - 0.5) * 160 * radius * spread;
+    positions[i * 3 + 1] = (next() - 0.5) * 96 * radius * spread;
+    positions[i * 3 + 2] = FAR_Z + 16 + next() * 34;
+
+    color.setHSL(0.58 + next() * 0.08, 0.18 + next() * 0.2, 0.76 + next() * 0.22);
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
 }
 
 function v(x, y, z) {
@@ -1034,8 +1359,14 @@ function createCraneData(count, reducedMotion) {
   for (let i = 0; i < count; i += 1) {
     data.layer[i] = i < heroCount ? HERO_LAYER : i < midEnd ? MID_LAYER : BACK_LAYER;
     data.hero[i] = data.layer[i] === HERO_LAYER ? 1 : 0;
-    data.colorType[i] = getCraneColorType(i, count);
     data.messageIndex[i] = i % WISH_MESSAGES.length;
+  }
+
+  assignColorTypesForRange(data, 0, heroCount);
+  assignColorTypesForRange(data, heroCount, midEnd);
+  assignColorTypesForRange(data, midEnd, count);
+
+  for (let i = 0; i < count; i += 1) {
     resetCrane(data, i, true, reducedMotion);
   }
 
@@ -2433,7 +2764,7 @@ function SkyBackdrop({ skyStyle }) {
 function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
   const meshRef = useRef();
   const { camera, size } = useThree();
-  const texture = useMemo(() => createCloudTexture(layer + 3), [layer]);
+  const texture = useMemo(() => createCloudTexture(layer + 7), [layer]);
 
   useEffect(
     () => () => {
@@ -2446,22 +2777,30 @@ function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
     if (!meshRef.current || !texture) return;
 
     const elapsed = clock.getElapsedTime();
-    const z = layer === 0 ? FAR_Z + 46 : FAR_Z + 28;
+    const z = layer === 0 ? FAR_Z + 54 : layer === 1 ? FAR_Z + 38 : FAR_Z + 22;
     const distanceToCamera = camera.position.z - z;
     const fov = THREE.MathUtils.degToRad(camera.fov);
     const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
     const viewWidth = viewHeight * (size.width / size.height);
-    const x = camera.position.x + (layer === 0 ? -0.18 : 0.22) * viewWidth * 0.5;
-    const y = camera.position.y + (layer === 0 ? 0.18 : -0.06) * viewHeight * 0.5;
-    const drift = reducedMotion ? 0 : elapsed * (layer === 0 ? 0.004 : -0.006);
+    const layerConfig = [
+      { x: -0.2, y: 0.28, width: 0.88, height: 0.24, speed: 0.0012, opacity: 0.58, rotation: -0.025 },
+      { x: 0.18, y: 0.08, width: 0.78, height: 0.29, speed: -0.0018, opacity: 0.88, rotation: 0.03 },
+      { x: 0.04, y: -0.18, width: 0.92, height: 0.34, speed: 0.0024, opacity: 0.56, rotation: -0.012 },
+    ][layer];
+    const motionScale = reducedMotion ? 0.16 : 1;
 
-    texture.offset.x = wrap01(texture.offset.x + delta * (reducedMotion ? 0.0006 : layer === 0 ? 0.0018 : -0.0012));
-    meshRef.current.position.set(x + Math.sin(elapsed * 0.035 + layer) * 1.5, y, z);
-    meshRef.current.rotation.z = (layer === 0 ? -0.03 : 0.04) + Math.sin(elapsed * 0.02 + layer) * 0.01;
-    meshRef.current.scale.set(viewWidth * (layer === 0 ? 0.68 : 0.58), viewHeight * (layer === 0 ? 0.24 : 0.2), 1);
+    texture.offset.x = wrap01(texture.offset.x + delta * layerConfig.speed * motionScale);
+    texture.offset.y = 0.02 * Math.sin(elapsed * 0.012 + layer);
+    meshRef.current.position.set(
+      camera.position.x + layerConfig.x * viewWidth * 0.5 + Math.sin(elapsed * 0.025 + layer) * 0.8 * motionScale,
+      camera.position.y + layerConfig.y * viewHeight * 0.5,
+      z,
+    );
+    meshRef.current.rotation.z = layerConfig.rotation + Math.sin(elapsed * 0.016 + layer) * 0.006 * motionScale;
+    meshRef.current.scale.set(viewWidth * layerConfig.width, viewHeight * layerConfig.height, 1);
     meshRef.current.material.opacity =
-      (skyStyle.key === 'night' ? 0.28 : skyStyle.key === 'day' ? 0.95 : 1.0) *
-      (1 + Math.sin(drift + layer) * 0.08);
+      skyStyle.cloudOpacity * layerConfig.opacity * (1 + Math.sin(elapsed * 0.02 + layer) * 0.04 * motionScale);
+    meshRef.current.material.color.set(skyStyle.cloudColor);
   });
 
   return (
@@ -2469,7 +2808,7 @@ function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial
         map={texture}
-        color={skyStyle.key === 'sunset' ? '#ffd2c5' : '#ffffff'}
+        color={skyStyle.cloudColor}
         transparent
         opacity={0.2}
         depthWrite={false}
@@ -2479,18 +2818,12 @@ function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
   );
 }
 
-function SkyOrb({ skyStyle, reducedMotion }) {
+function SkySun({ skyStyle, reducedMotion }) {
   const groupRef = useRef();
   const glowRef = useRef();
   const diskRef = useRef();
   const { camera, size } = useThree();
-  const glowTexture = useMemo(
-    () =>
-      createRadialGlowTexture(
-        skyStyle.key === 'night' ? 'rgba(210,229,255,0.58)' : 'rgba(255,231,176,0.7)',
-      ),
-    [skyStyle.key],
-  );
+  const glowTexture = useMemo(() => createRadialGlowTexture('rgba(255,226,151,0.76)'), []);
 
   useEffect(
     () => () => {
@@ -2509,19 +2842,23 @@ function SkyOrb({ skyStyle, reducedMotion }) {
     const fov = THREE.MathUtils.degToRad(camera.fov);
     const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
     const viewWidth = viewHeight * aspect;
-    const orb = skyStyle.key === 'night' ? { x: 0.43, y: 0.38 } : skyStyle.key === 'sunset' ? { x: -0.42, y: -0.08 } : skyStyle.key === 'dawn' ? { x: -0.34, y: 0.05 } : { x: 0.48, y: 0.42 };
-    const floatY = reducedMotion ? 0 : Math.sin(elapsed * 0.018) * 0.35;
+    const floatY = reducedMotion ? 0 : Math.sin(elapsed * 0.014) * 0.22;
 
     groupRef.current.position.set(
-      camera.position.x + orb.x * viewWidth * 0.5,
-      camera.position.y + orb.y * viewHeight * 0.5 + floatY,
+      camera.position.x + skyStyle.sunPosition.x * viewWidth * 0.5,
+      camera.position.y + skyStyle.sunPosition.y * viewHeight * 0.5 + floatY,
       z,
     );
 
-    const diskScale = skyStyle.key === 'night' ? 3.0 : 3.7;
-    const glowScale = skyStyle.key === 'night' ? 13 : 19;
-    if (diskRef.current) diskRef.current.scale.setScalar(diskScale);
-    if (glowRef.current) glowRef.current.scale.setScalar(glowScale);
+    if (diskRef.current) diskRef.current.scale.setScalar(4.15);
+    if (glowRef.current) glowRef.current.scale.setScalar(21);
+    if (diskRef.current?.material) {
+      diskRef.current.material.opacity = 0.95 * skyStyle.sunVisibility;
+      diskRef.current.material.color.set(skyStyle.sun);
+    }
+    if (glowRef.current?.material) {
+      glowRef.current.material.opacity = 0.68 * skyStyle.sunVisibility;
+    }
   });
 
   return (
@@ -2531,7 +2868,7 @@ function SkyOrb({ skyStyle, reducedMotion }) {
         <meshBasicMaterial
           map={glowTexture}
           transparent
-          opacity={skyStyle.key === 'night' ? 0.48 : 0.62}
+          opacity={0}
           depthWrite={false}
           depthTest={false}
           blending={THREE.AdditiveBlending}
@@ -2541,11 +2878,12 @@ function SkyOrb({ skyStyle, reducedMotion }) {
       <mesh ref={diskRef} raycast={nullRaycast}>
         <circleGeometry args={[0.5, 64]} />
         <meshBasicMaterial
-          color={skyStyle.key === 'night' ? '#e8f2ff' : '#ffe8a8'}
+          color={skyStyle.sun}
           transparent
-          opacity={skyStyle.key === 'night' ? 0.78 : 0.88}
+          opacity={0}
           depthWrite={false}
           depthTest={false}
+          blending={THREE.AdditiveBlending}
           toneMapped={false}
         />
       </mesh>
@@ -2553,55 +2891,166 @@ function SkyOrb({ skyStyle, reducedMotion }) {
   );
 }
 
-function SkyParticles({ count, reducedMotion, skyStyle }) {
-  const pointsRef = useRef();
-  const materialRef = useRef();
-  const geometry = useMemo(() => {
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const color = new THREE.Color();
+function SkyMoon({ skyStyle, reducedMotion }) {
+  const groupRef = useRef();
+  const glowRef = useRef();
+  const baseRef = useRef();
+  const diskRef = useRef();
+  const { camera, size } = useThree();
+  const glowTexture = useMemo(() => createRadialGlowTexture('rgba(198,221,255,0.62)'), []);
+  const moonTexture = useMemo(() => createMoonTexture(), []);
 
-    for (let i = 0; i < count; i += 1) {
-      const radius = Math.pow(Math.random(), 0.6);
-      positions[i * 3] = random(-68, 68) * radius;
-      positions[i * 3 + 1] = random(-42, 42) * radius;
-      positions[i * 3 + 2] = random(FAR_Z - 8, 12);
+  useEffect(
+    () => () => {
+      glowTexture?.dispose();
+      moonTexture?.dispose();
+    },
+    [glowTexture, moonTexture],
+  );
 
-      color.setHSL(random(0.06, 0.62), random(0.14, 0.34), random(0.62, 0.88));
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
+  useFrame(({ clock }) => {
+    if (!groupRef.current) return;
+
+    const elapsed = clock.getElapsedTime();
+    const z = FAR_Z + 36;
+    const distanceToCamera = camera.position.z - z;
+    const fov = THREE.MathUtils.degToRad(camera.fov);
+    const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+    const viewWidth = viewHeight * (size.width / size.height);
+    const floatY = reducedMotion ? 0 : Math.sin(elapsed * 0.012 + 1.4) * 0.18;
+
+    groupRef.current.position.set(
+      camera.position.x + skyStyle.moonPosition.x * viewWidth * 0.5,
+      camera.position.y + skyStyle.moonPosition.y * viewHeight * 0.5 + floatY,
+      z,
+    );
+    if (baseRef.current) baseRef.current.scale.setScalar(3.35);
+    if (diskRef.current) diskRef.current.scale.setScalar(3.32);
+    if (glowRef.current) glowRef.current.scale.setScalar(14.5);
+    if (baseRef.current?.material) {
+      baseRef.current.material.opacity = 0.96 * skyStyle.moonVisibility;
     }
-
-    const buffer = new THREE.BufferGeometry();
-    buffer.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    buffer.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    return buffer;
-  }, [count]);
-
-  useFrame(({ clock }, delta) => {
-    if (!pointsRef.current) return;
-    if (!reducedMotion) pointsRef.current.rotation.z += delta * 0.004;
-    if (materialRef.current) {
-      const twinkle = reducedMotion ? 1 : 0.88 + Math.sin(clock.getElapsedTime() * 0.7) * 0.12;
-      const nightOpacity = skyStyle.key === 'night' ? skyStyle.particleOpacity * twinkle : 0;
-      materialRef.current.opacity = nightOpacity;
+    if (diskRef.current?.material) {
+      diskRef.current.material.opacity = 0.42 * skyStyle.moonVisibility;
+    }
+    if (glowRef.current?.material) {
+      glowRef.current.material.opacity = 0.68 * skyStyle.moonVisibility;
     }
   });
 
   return (
-    <points ref={pointsRef} geometry={geometry} frustumCulled={false} raycast={nullRaycast}>
+    <group ref={groupRef} renderOrder={-69}>
+      <mesh ref={glowRef} raycast={nullRaycast}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial
+          map={glowTexture}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh ref={baseRef} raycast={nullRaycast}>
+        <circleGeometry args={[0.5, 72]} />
+        <meshBasicMaterial
+          color="#f3f7ff"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh ref={diskRef} raycast={nullRaycast}>
+        <circleGeometry args={[0.5, 72]} />
+        <meshBasicMaterial
+          map={moonTexture}
+          color="#edf5ff"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+          toneMapped={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function SkyStarField({ count, reducedMotion, skyStyle }) {
+  const tinyRef = useRef();
+  const mediumRef = useRef();
+  const brightRef = useRef();
+  const tinyGeometry = useMemo(() => createStarGeometry(Math.max(80, Math.floor(count * 0.68)), 17, 1.05), [count]);
+  const mediumGeometry = useMemo(() => createStarGeometry(Math.max(24, Math.floor(count * 0.23)), 41, 0.9), [count]);
+  const brightGeometry = useMemo(() => createStarGeometry(Math.max(8, Math.floor(count * 0.07)), 83, 0.76), [count]);
+
+  useEffect(
+    () => () => {
+      tinyGeometry.dispose();
+      mediumGeometry.dispose();
+      brightGeometry.dispose();
+    },
+    [tinyGeometry, mediumGeometry, brightGeometry],
+  );
+
+  useFrame(({ clock }, delta) => {
+    const elapsed = clock.getElapsedTime();
+    const twinkle = reducedMotion ? 1 : 0.88 + Math.sin(elapsed * 0.9) * 0.12;
+    const opacity = skyStyle.starOpacity * twinkle;
+    if (!reducedMotion) {
+      if (tinyRef.current) tinyRef.current.rotation.z += delta * 0.0016;
+      if (mediumRef.current) mediumRef.current.rotation.z -= delta * 0.0011;
+      if (brightRef.current) brightRef.current.rotation.z += delta * 0.0007;
+    }
+    if (tinyRef.current?.material) tinyRef.current.material.opacity = opacity * 0.55;
+    if (mediumRef.current?.material) mediumRef.current.material.opacity = opacity * 0.78;
+    if (brightRef.current?.material) brightRef.current.material.opacity = opacity;
+  });
+
+  return (
+    <>
+      <points ref={tinyRef} geometry={tinyGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-90}>
+        <pointsMaterial
+          size={0.045}
+          sizeAttenuation
+          vertexColors
+          transparent
+          opacity={0}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+      <points ref={mediumRef} geometry={mediumGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-89}>
+        <pointsMaterial
+          size={0.085}
+          sizeAttenuation
+          vertexColors
+          transparent
+          opacity={0}
+          depthWrite={false}
+          depthTest={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+      <points ref={brightRef} geometry={brightGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-88}>
       <pointsMaterial
-        ref={materialRef}
-        size={0.07}
+        size={0.14}
         sizeAttenuation
         vertexColors
         transparent
-        opacity={skyStyle.key === 'night' ? skyStyle.particleOpacity : 0}
+        opacity={0}
         depthWrite={false}
-        blending={skyStyle.key === 'night' ? THREE.AdditiveBlending : THREE.NormalBlending}
+        depthTest={false}
+        blending={THREE.AdditiveBlending}
       />
-    </points>
+      </points>
+    </>
   );
 }
 
@@ -2904,26 +3353,32 @@ function GlassDisplayBox({ depositRef, reducedMotion }) {
 }
 
 function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky }) {
-  const skyStyle = SKY_STYLES[sky.phase] ?? SKY_STYLES.day;
+  const skyStyle = sky.skyStyle;
 
   return (
     <>
       <color attach="background" args={[skyStyle.horizon]} />
-      <fog attach="fog" args={[skyStyle.fog, 32, 162]} />
+      <fog attach="fog" args={[skyStyle.fog, skyStyle.key === 'night' ? 24 : 32, skyStyle.key === 'night' ? 140 : 162]} />
 
       <ambientLight intensity={skyStyle.ambient} />
       <hemisphereLight args={[skyStyle.hemiSky, skyStyle.hemiGround, skyStyle.hemiIntensity]} />
-      <directionalLight position={[5.5, 9, 14]} intensity={skyStyle.sunIntensity} color={skyStyle.sun} />
+      <directionalLight
+        position={[skyStyle.sunPosition.x * 12, 5 + skyStyle.sunPosition.y * 10, 12]}
+        intensity={skyStyle.sunIntensity}
+        color={skyStyle.sun}
+      />
       <directionalLight position={[-7, 2, -12]} intensity={skyStyle.rimIntensity} color={skyStyle.rim} />
-      <pointLight position={[-9, -3, 12]} intensity={1.1} color="#ffffff" distance={46} />
-      <pointLight position={[10, 7, -24]} intensity={0.74} color={skyStyle.rim} distance={76} />
+      <pointLight position={[-9, -3, 12]} intensity={0.55 + (1 - skyStyle.night) * 0.55} color="#ffffff" distance={46} />
+      <pointLight position={[10, 7, -24]} intensity={0.42 + skyStyle.moonVisibility * 0.5} color={skyStyle.rim} distance={76} />
 
       <CameraRig interactionRef={interactionRef} reducedMotion={tier.reducedMotion} />
       <SkyBackdrop skyStyle={skyStyle} />
-      <SkyOrb skyStyle={skyStyle} reducedMotion={tier.reducedMotion} />
+      <SkySun skyStyle={skyStyle} reducedMotion={tier.reducedMotion} />
+      <SkyMoon skyStyle={skyStyle} reducedMotion={tier.reducedMotion} />
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={0} />
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={1} />
-      <SkyParticles count={tier.particles} reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
+      <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={2} />
+      <SkyStarField count={tier.particles} reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
       <GlassDisplayBox depositRef={depositRef} reducedMotion={tier.reducedMotion} />
       <CraneField
         count={tier.cranes}
