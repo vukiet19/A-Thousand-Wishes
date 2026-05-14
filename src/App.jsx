@@ -76,18 +76,6 @@ const WISH_MESSAGES = [
   'A thousand small chances to begin again.',
 ];
 
-const STORED_SLOT_OFFSETS = [
-  [-0.5, -0.42, 0.08],
-  [-0.18, -0.48, -0.02],
-  [0.18, -0.45, 0.06],
-  [0.5, -0.4, -0.04],
-  [-0.36, -0.18, 0.04],
-  [0.0, -0.22, -0.06],
-  [0.35, -0.14, 0.07],
-  [-0.2, 0.02, -0.03],
-  [0.18, 0.05, 0.05],
-];
-
 const SKY_STYLES = {
   dawn: {
     key: 'dawn',
@@ -920,8 +908,18 @@ function resetCrane(data, index, startSpread, reducedMotion) {
   data.storedX[index] = data.x[index];
   data.storedY[index] = data.y[index];
   data.storedZ[index] = data.z[index];
+  data.storedVx[index] = 0;
+  data.storedVy[index] = 0;
+  data.storedVz[index] = 0;
+  data.storedPitch[index] = 0;
   data.storedYaw[index] = 0;
   data.storedRoll[index] = 0;
+  data.storedAngularX[index] = 0;
+  data.storedAngularY[index] = 0;
+  data.storedAngularZ[index] = 0;
+  data.storedRadius[index] = 0;
+  data.storedResting[index] = 0;
+  data.storedRestTime[index] = 0;
   data.exitState[index] = 0;
   data.exitSide[index] = EXIT_RIGHT;
   data.exitX[index] = 0;
@@ -1002,8 +1000,18 @@ function createCraneData(count, reducedMotion) {
     storedX: new Float32Array(count),
     storedY: new Float32Array(count),
     storedZ: new Float32Array(count),
+    storedVx: new Float32Array(count),
+    storedVy: new Float32Array(count),
+    storedVz: new Float32Array(count),
+    storedPitch: new Float32Array(count),
     storedYaw: new Float32Array(count),
     storedRoll: new Float32Array(count),
+    storedAngularX: new Float32Array(count),
+    storedAngularY: new Float32Array(count),
+    storedAngularZ: new Float32Array(count),
+    storedRadius: new Float32Array(count),
+    storedResting: new Uint8Array(count),
+    storedRestTime: new Float32Array(count),
     exitState: new Uint8Array(count),
     exitSide: new Int8Array(count),
     exitX: new Float32Array(count),
@@ -1185,22 +1193,50 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
       data.storedSlot[index] = slot;
       data.storedProgress[index] = 0;
       data.storedSize[index] = clamp(
-        data.size[index] * (data.hero[index] ? 0.34 : 0.52),
-        0.2,
-        data.hero[index] ? 0.38 : 0.34,
+        data.size[index] * (data.hero[index] ? 0.48 : 0.78),
+        0.34,
+        data.hero[index] ? 0.62 : 0.54,
       );
-      data.storedYaw[index] = random(-0.72, 0.72);
-      data.storedRoll[index] = random(-0.42, 0.42);
+      data.storedRadius[index] = data.storedSize[index] * (data.hero[index] ? 0.58 : 0.66);
+      data.storedPitch[index] = random(0.16, 0.48) * (Math.random() < 0.5 ? -1 : 1);
+      data.storedYaw[index] = random(-1.2, 1.2);
+      data.storedRoll[index] = random(-0.86, 0.86);
+      data.storedAngularX[index] = random(-1.2, 1.2) * (reducedMotion ? 0.28 : 1);
+      data.storedAngularY[index] = random(-0.9, 0.9) * (reducedMotion ? 0.24 : 1);
+      data.storedAngularZ[index] = random(-1.5, 1.5) * (reducedMotion ? 0.25 : 1);
+      data.storedResting[index] = 0;
+      data.storedRestTime[index] = 0;
       data.exitState[index] = 0;
       data.exitAge[index] = 0;
       data.offscreenTime[index] = 0;
 
       const centerX = vessel.centerX ?? data.x[index];
-      const centerY = vessel.centerY ?? data.y[index];
+      const topY = vessel.topY ?? vessel.mouthY ?? data.y[index];
+      const bottomY = vessel.bottomY ?? (vessel.centerY ?? data.y[index]);
       const centerZ = vessel.centerZ ?? data.z[index];
-      data.vx[index] = (centerX - data.x[index]) * (reducedMotion ? 0.45 : 0.72);
-      data.vy[index] = (centerY - data.y[index]) * (reducedMotion ? 0.36 : 0.58) - (reducedMotion ? 0.22 : 0.42);
-      data.vz[index] = (centerZ - data.z[index]) * (reducedMotion ? 0.38 : 0.58);
+      const minX = vessel.boxMinX ?? centerX - (vessel.scale ?? 1.6) * 0.8;
+      const maxX = vessel.boxMaxX ?? centerX + (vessel.scale ?? 1.6) * 0.8;
+      const minZ = vessel.boxMinZ ?? centerZ - (vessel.scale ?? 1.6) * 0.45;
+      const maxZ = vessel.boxMaxZ ?? centerZ + (vessel.scale ?? 1.6) * 0.45;
+      const entryX = clamp(data.x[index] * 0.72 + centerX * 0.28 + random(-0.12, 0.12), minX + 0.08, maxX - 0.08);
+      const entryZ = clamp(data.z[index] * 0.42 + centerZ * 0.58 + random(-0.08, 0.08), minZ + 0.08, maxZ - 0.08);
+      const entryY = Math.max(topY + data.storedRadius[index] * 0.42, Math.min(data.y[index], topY + (vessel.scale ?? 1.6) * 0.34));
+      data.x[index] = entryX;
+      data.y[index] = Math.max(entryY, bottomY + data.storedRadius[index]);
+      data.z[index] = entryZ;
+      data.storedX[index] = data.x[index];
+      data.storedY[index] = data.y[index];
+      data.storedZ[index] = data.z[index];
+      const lateralScale = reducedMotion ? 0.035 : 0.055;
+      data.storedVx[index] = clamp(data.grabVelocityX[index] * lateralScale + random(-0.26, 0.26), -1.3, 1.3);
+      data.storedVy[index] = Math.min(
+        -(reducedMotion ? 0.42 : 0.88),
+        data.grabVelocityY[index] * (reducedMotion ? 0.018 : 0.026) - (reducedMotion ? 0.48 : 0.95),
+      );
+      data.storedVz[index] = clamp(data.grabVelocityZ[index] * 0.045 + random(-0.18, 0.18), -0.85, 0.85);
+      data.vx[index] = data.storedVx[index];
+      data.vy[index] = data.storedVy[index];
+      data.vz[index] = data.storedVz[index];
       data.ax[index] = 0;
       data.ay[index] = 0;
       data.az[index] = 0;
@@ -1535,26 +1571,120 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
         data.grabAge[i] += dt;
 
         if (heldStatus === HOLD_STORED) {
-          const slot = Math.max(0, data.storedSlot[i]);
-          const slotOffset = STORED_SLOT_OFFSETS[slot % STORED_SLOT_OFFSETS.length];
-          const stack = Math.floor(slot / STORED_SLOT_OFFSETS.length);
-          const vesselScale = vessel.scale ?? 1.8;
-          const stackLift = Math.min(stack, 5) * 0.085;
-          const targetX = (vessel.centerX ?? 8.4) + slotOffset[0] * vesselScale;
-          const targetY = (vessel.centerY ?? -5.5) + (slotOffset[1] + stackLift) * vesselScale;
-          const targetZ = (vessel.centerZ ?? 3.2) + slotOffset[2] * vesselScale;
-          const settle = smoothstep(0, 1, data.storedProgress[i]);
-          const idle = reducedMotion ? 0 : Math.sin(elapsed * 0.52 + data.grabPhase[i]) * 0.018;
-          const spring = (reducedMotion ? 5.4 : 8.8) * (0.7 + settle * 0.55);
-          const damping = reducedMotion ? 5.2 : 7.8;
+          const vesselScale = vessel.scale ?? 1.65;
+          const radius = Math.max(0.14, data.storedRadius[i] || data.storedSize[i] * 0.62);
+          const minX = (vessel.boxMinX ?? (vessel.centerX ?? 8.4) - vesselScale * 0.9) + radius * 0.38;
+          const maxX = (vessel.boxMaxX ?? (vessel.centerX ?? 8.4) + vesselScale * 0.9) - radius * 0.38;
+          const minZ = (vessel.boxMinZ ?? (vessel.centerZ ?? 3.8) - vesselScale * 0.52) + radius * 0.34;
+          const maxZ = (vessel.boxMaxZ ?? (vessel.centerZ ?? 3.8) + vesselScale * 0.52) - radius * 0.34;
+          const floorY = (vessel.bottomY ?? (vessel.centerY ?? -5.5) - vesselScale * 0.56) + radius * 0.34;
+          const ceilingY = (vessel.topY ?? (vessel.centerY ?? -5.5) + vesselScale * 0.62) + radius * 0.3;
+          const resting = data.storedResting[i] === 1;
+          let ax = -data.vx[i] * (resting ? 3.4 : 0.52);
+          let ay = resting ? -data.vy[i] * 4.5 : -(reducedMotion ? 2.05 : 4.45) - data.vy[i] * 0.34;
+          let az = -data.vz[i] * (resting ? 3.4 : 0.52);
+          let contact = false;
 
-          data.storedProgress[i] = Math.min(1, data.storedProgress[i] + dt / (reducedMotion ? 1.18 : 0.82));
-          data.storedX[i] = targetX;
-          data.storedY[i] = targetY;
-          data.storedZ[i] = targetZ;
-          data.ax[i] = (targetX - xi) * spring - data.vx[i] * damping;
-          data.ay[i] = (targetY + idle - yi) * spring - data.vy[i] * damping - (1 - settle) * (reducedMotion ? 0.18 : 0.36);
-          data.az[i] = (targetZ - zi) * spring - data.vz[i] * damping;
+          if (!resting) {
+            data.storedAngularX[i] *= 1 - Math.min(0.08, dt * (reducedMotion ? 1.2 : 1.8));
+            data.storedAngularY[i] *= 1 - Math.min(0.08, dt * (reducedMotion ? 1.0 : 1.5));
+            data.storedAngularZ[i] *= 1 - Math.min(0.08, dt * (reducedMotion ? 1.2 : 1.9));
+            data.storedPitch[i] += data.storedAngularX[i] * dt;
+            data.storedYaw[i] += data.storedAngularY[i] * dt;
+            data.storedRoll[i] += data.storedAngularZ[i] * dt;
+          }
+
+          if (data.x[i] < minX) {
+            data.x[i] = minX;
+            data.vx[i] = Math.abs(data.vx[i]) * (reducedMotion ? 0.18 : 0.32);
+            contact = true;
+          } else if (data.x[i] > maxX) {
+            data.x[i] = maxX;
+            data.vx[i] = -Math.abs(data.vx[i]) * (reducedMotion ? 0.18 : 0.32);
+            contact = true;
+          }
+          if (data.z[i] < minZ) {
+            data.z[i] = minZ;
+            data.vz[i] = Math.abs(data.vz[i]) * (reducedMotion ? 0.16 : 0.28);
+            contact = true;
+          } else if (data.z[i] > maxZ) {
+            data.z[i] = maxZ;
+            data.vz[i] = -Math.abs(data.vz[i]) * (reducedMotion ? 0.16 : 0.28);
+            contact = true;
+          }
+          if (data.y[i] < floorY) {
+            data.y[i] = floorY;
+            data.vy[i] = Math.abs(data.vy[i]) * (reducedMotion ? 0.12 : 0.22);
+            data.vx[i] *= reducedMotion ? 0.62 : 0.72;
+            data.vz[i] *= reducedMotion ? 0.62 : 0.72;
+            contact = true;
+          } else if (data.y[i] > ceilingY) {
+            data.y[i] = ceilingY;
+            data.vy[i] = Math.min(0, data.vy[i]) * 0.3;
+          }
+
+          for (let j = 0; j < count; j += 1) {
+            if (
+              j === i ||
+              data.held[j] !== HOLD_STORED ||
+              data.storedProgress[j] <= 0.08 ||
+              data.storedSlot[j] >= data.storedSlot[i]
+            ) {
+              continue;
+            }
+            const otherRadius = Math.max(0.12, data.storedRadius[j] || data.storedSize[j] * 0.62);
+            const dx = data.x[i] - data.x[j];
+            const dz = data.z[i] - data.z[j];
+            const dy = data.y[i] - data.y[j];
+            const horizontalSq = dx * dx + dz * dz;
+            const minDistance = (radius + otherRadius) * 0.82;
+            const verticalLimit = (radius + otherRadius) * 0.72;
+            if (horizontalSq < minDistance * minDistance && Math.abs(dy) < verticalLimit) {
+              const horizontalDistance = Math.sqrt(horizontalSq) || 0.001;
+              const nx = dx / horizontalDistance;
+              const nz = dz / horizontalDistance;
+              const overlap = minDistance - horizontalDistance;
+              const liftTarget = data.y[j] + (radius + otherRadius) * (dy < 0.1 ? 0.46 : 0.34);
+              data.x[i] = clamp(data.x[i] + nx * overlap * 0.38, minX, maxX);
+              data.z[i] = clamp(data.z[i] + nz * overlap * 0.38, minZ, maxZ);
+              if (data.y[i] < liftTarget) {
+                data.y[i] = Math.min(ceilingY, data.y[i] + (liftTarget - data.y[i]) * 0.52);
+                data.vy[i] = Math.max(data.vy[i], reducedMotion ? 0.04 : 0.08);
+              }
+              ax += nx * overlap * (reducedMotion ? 5.8 : 9.5);
+              az += nz * overlap * (reducedMotion ? 5.8 : 9.5);
+              data.vx[i] *= reducedMotion ? 0.58 : 0.68;
+              data.vz[i] *= reducedMotion ? 0.58 : 0.68;
+              contact = true;
+            }
+          }
+
+          const storedSpeed = Math.hypot(data.vx[i], data.vy[i], data.vz[i]);
+          if (contact && storedSpeed < (reducedMotion ? 0.42 : 0.58)) {
+            data.storedRestTime[i] += dt;
+          } else {
+            data.storedRestTime[i] = Math.max(0, data.storedRestTime[i] - dt * 0.8);
+          }
+          if (data.storedRestTime[i] > (reducedMotion ? 0.22 : 0.38)) {
+            data.storedResting[i] = 1;
+            data.vx[i] *= 0.34;
+            data.vy[i] *= 0.18;
+            data.vz[i] *= 0.34;
+            data.storedAngularX[i] *= 0.18;
+            data.storedAngularY[i] *= 0.18;
+            data.storedAngularZ[i] *= 0.18;
+          }
+
+          data.storedProgress[i] = Math.min(1, data.storedProgress[i] + dt / (reducedMotion ? 0.78 : 0.48));
+          data.storedX[i] = data.x[i];
+          data.storedY[i] = data.y[i];
+          data.storedZ[i] = data.z[i];
+          data.storedVx[i] = data.vx[i];
+          data.storedVy[i] = data.vy[i];
+          data.storedVz[i] = data.vz[i];
+          data.ax[i] = ax;
+          data.ay[i] = ay;
+          data.az[i] = az;
           data.grabIntensity[i] += (0 - data.grabIntensity[i]) * (1 - Math.exp(-dt * 1.8));
           data.grabBank[i] += (0 - data.grabBank[i]) * (1 - Math.exp(-dt * 2.2));
           data.wakeCue[i] = 0;
@@ -1956,8 +2086,8 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
             : 38
           : heldStatus === HOLD_STORED
             ? reducedMotion
-              ? 4.8
-              : 7.4
+              ? 2.8
+              : 4.8
           : heldStatus === HOLD_RELEASING
             ? reducedMotion
               ? 13.2
@@ -2077,8 +2207,10 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
         (reducedMotion ? 0.055 : 0.19) *
         (1 + dragIntensity * (reducedMotion ? 0.45 : 1.65)) *
         (1 + Math.sin(elapsed * 0.37 + data.grabPhase[i]) * 0.12);
+      const storedRestVisual = heldStatus === HOLD_STORED && data.storedResting[i] === 1 ? 1 : 0;
       const storedWingAmp =
-        (reducedMotion ? 0.018 : 0.04) *
+        (reducedMotion ? 0.01 : 0.026) *
+        (1 - storedRestVisual * 0.55) *
         (1 + Math.sin(elapsed * 0.36 + data.grabPhase[i]) * 0.14);
       let wingAmp = flockWingAmp * (1 - holdVisual) + heldWingAmp * holdVisual;
       wingAmp = wingAmp * (1 - storedVisual) + storedWingAmp * storedVisual;
@@ -2092,7 +2224,11 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
         slowSway * 0.4 +
         holdVisual * Math.sin(elapsed * 0.5 + data.grabPhase[i]) * (reducedMotion ? 0.018 : 0.04) +
         dragIntensity * -bodyPose * (reducedMotion ? 0.018 : 0.045);
-      bodyFloat += storedVisual * Math.sin(elapsed * 0.46 + data.grabPhase[i]) * (reducedMotion ? 0.004 : 0.012);
+      bodyFloat +=
+        storedVisual *
+        (1 - storedRestVisual * 0.75) *
+        Math.sin(elapsed * 0.46 + data.grabPhase[i]) *
+        (reducedMotion ? 0.003 : 0.008);
       const heldTargetSize = Math.max(data.size[i], hero ? 0.92 : 0.7);
       const storedTargetSize = data.storedSize[i] > 0 ? data.storedSize[i] : data.size[i] * 0.42;
       let displaySize = data.size[i] + (heldTargetSize - data.size[i]) * holdVisual;
@@ -2126,11 +2262,17 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
       const normalYaw = yaw * (1 - holdVisual * 0.62);
       const normalRoll =
         data.roll[i] + wingPose * (hero ? 0.025 : 0.018) + exitCommitVisual * data.exitX[i] * 0.05;
-      const storedPitch =
-        0.22 + Math.sin(elapsed * 0.4 + data.grabPhase[i]) * (reducedMotion ? 0.006 : 0.018);
+      const storedWobble =
+        (1 - storedRestVisual * 0.8) *
+        Math.sin(elapsed * 0.4 + data.grabPhase[i]) *
+        (reducedMotion ? 0.004 : 0.014);
+      const storedPitch = data.storedPitch[i] + storedWobble;
       const storedYaw = data.storedYaw[i];
       const storedRoll =
-        data.storedRoll[i] + Math.sin(elapsed * 0.32 + data.grabPhase[i]) * (reducedMotion ? 0.005 : 0.014);
+        data.storedRoll[i] +
+        (1 - storedRestVisual * 0.8) *
+          Math.sin(elapsed * 0.32 + data.grabPhase[i]) *
+          (reducedMotion ? 0.004 : 0.012);
 
       baseObject.position.set(renderX, renderY, data.z[i]);
       baseObject.rotation.set(
@@ -2536,177 +2678,227 @@ function BurstEcho({ interactionRef }) {
   );
 }
 
-function WishVessel({ depositRef, reducedMotion }) {
+function GlassDisplayBox({ depositRef, reducedMotion }) {
   const groupRef = useRef();
-  const rimRef = useRef();
-  const glowRef = useRef();
-  const glassRef = useRef();
+  const frontTopEdgeRef = useRef();
+  const backTopEdgeRef = useRef();
+  const leftTopEdgeRef = useRef();
+  const rightTopEdgeRef = useRef();
+  const frontPanelRef = useRef();
   const { camera, size } = useThree();
-  const bowlGeometry = useMemo(() => {
-    const profile = [
-      new THREE.Vector2(0.34, -0.72),
-      new THREE.Vector2(0.52, -0.58),
-      new THREE.Vector2(0.86, -0.24),
-      new THREE.Vector2(1.02, 0.16),
-      new THREE.Vector2(0.92, 0.54),
-    ];
-    const geometry = new THREE.LatheGeometry(profile, 72);
-    geometry.computeVertexNormals();
-    return geometry;
-  }, []);
-  const highlightGeometries = useMemo(() => {
-    const makeTube = (points, radius) => {
-      const curve = new THREE.CatmullRomCurve3(points.map((point) => new THREE.Vector3(...point)));
-      return new THREE.TubeGeometry(curve, 28, radius, 8, false);
-    };
-
-    return [
-      makeTube(
-        [
-          [-0.54, 0.38, 0.58],
-          [-0.72, 0.08, 0.7],
-          [-0.64, -0.34, 0.58],
-          [-0.36, -0.62, 0.34],
-        ],
-        0.012,
-      ),
-      makeTube(
-        [
-          [0.46, 0.3, 0.62],
-          [0.62, -0.02, 0.66],
-          [0.52, -0.38, 0.52],
-        ],
-        0.008,
-      ),
-    ];
-  }, []);
-
-  useEffect(
-    () => () => {
-      bowlGeometry.dispose();
-      for (let i = 0; i < highlightGeometries.length; i += 1) {
-        highlightGeometries[i].dispose();
-      }
-    },
-    [bowlGeometry, highlightGeometries],
-  );
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
 
     const aspect = size.width / size.height;
     const mobile = size.width < 720;
-    const z = mobile ? 4.8 : 3.8;
+    const z = mobile ? 4.65 : 3.65;
     const distanceToCamera = camera.position.z - z;
     const fov = THREE.MathUtils.degToRad(camera.fov);
     const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
     const viewWidth = viewHeight * aspect;
-    const scale = mobile ? 1.24 : 1.72;
-    const x = camera.position.x + (mobile ? 0.42 : 0.64) * viewWidth * 0.5;
-    const y = camera.position.y - (mobile ? 0.58 : 0.58) * viewHeight * 0.5;
+    const scale = mobile ? 2.15 : 3.05;
+    const x = camera.position.x + (mobile ? 0.44 : 0.72) * viewWidth * 0.5;
+    const y = camera.position.y - (mobile ? 0.75 : 0.72) * viewHeight * 0.5;
     const vessel = depositRef.current;
+    const halfWidth = 1.04 * scale;
+    const halfHeight = 0.58 * scale;
+    const halfDepth = 0.54 * scale;
 
     groupRef.current.position.set(x, y, z);
     groupRef.current.scale.setScalar(scale);
-    groupRef.current.rotation.set(0.04, -0.18, 0.02);
+    groupRef.current.rotation.set(0.012, -0.08, 0);
 
     vessel.centerX = x;
     vessel.centerY = y;
     vessel.centerZ = z;
     vessel.scale = scale;
     vessel.mouthX = x;
-    vessel.mouthY = y + 0.52 * scale;
-    vessel.mouthZ = z + 0.02 * scale;
-    vessel.worldRadiusX = 1.0 * scale;
-    vessel.worldRadiusY = 0.44 * scale;
-    vessel.worldRadiusZ = 0.82 * scale;
+    vessel.mouthY = y + halfHeight;
+    vessel.mouthZ = z + halfDepth * 0.18;
+    vessel.topY = y + halfHeight;
+    vessel.bottomY = y - halfHeight;
+    vessel.boxMinX = x - halfWidth * 0.9;
+    vessel.boxMaxX = x + halfWidth * 0.9;
+    vessel.boxMinY = y - halfHeight;
+    vessel.boxMaxY = y + halfHeight;
+    vessel.boxMinZ = z - halfDepth * 0.86;
+    vessel.boxMaxZ = z + halfDepth * 0.82;
+    vessel.worldRadiusX = halfWidth;
+    vessel.worldRadiusY = halfHeight * 0.46;
+    vessel.worldRadiusZ = halfDepth;
 
     const mouthDistance = camera.position.z - vessel.mouthZ;
     const mouthViewHeight = 2 * Math.tan(fov / 2) * mouthDistance;
     const mouthViewWidth = mouthViewHeight * aspect;
     vessel.dropX = (vessel.mouthX - camera.position.x) / (mouthViewWidth * 0.5);
     vessel.dropY = (vessel.mouthY - camera.position.y) / (mouthViewHeight * 0.5);
-    vessel.radiusX = mobile ? 0.28 : 0.19;
-    vessel.radiusY = mobile ? 0.2 : 0.14;
-    vessel.pulse = Math.max(0, (vessel.pulse ?? 0) - delta * (reducedMotion ? 1.25 : 1.8));
+    vessel.radiusX = mobile ? 0.43 : 0.37;
+    vessel.radiusY = mobile ? 0.18 : 0.17;
+    vessel.pulse = Math.max(0, (vessel.pulse ?? 0) - delta * (reducedMotion ? 1.15 : 1.7));
 
     const glow = vessel.hovered ? 1 : vessel.pulse;
-    if (rimRef.current?.material) {
-      rimRef.current.material.opacity = 0.42 + glow * 0.38;
-      rimRef.current.material.emissiveIntensity = 0.1 + glow * 0.72;
-    }
-    if (glowRef.current?.material) {
-      glowRef.current.material.opacity = (vessel.hovered ? 0.24 : 0.1) + glow * 0.2;
-      glowRef.current.scale.setScalar(1 + glow * 0.08);
-    }
-    if (glassRef.current?.material) {
-      glassRef.current.material.opacity = 0.24 + glow * 0.045;
+    const edgeOpacity = 0.58 + glow * 0.3;
+    const edgeEmission = 0.14 + glow * 0.72;
+    const updateEdge = (mesh) => {
+      if (!mesh?.material) return;
+      mesh.material.opacity = edgeOpacity;
+      mesh.material.emissiveIntensity = edgeEmission;
+    };
+    updateEdge(frontTopEdgeRef.current);
+    updateEdge(backTopEdgeRef.current);
+    updateEdge(leftTopEdgeRef.current);
+    updateEdge(rightTopEdgeRef.current);
+    if (frontPanelRef.current?.material) {
+      frontPanelRef.current.material.opacity = 0.055 + glow * 0.035;
     }
   });
 
+  const panelMaterial = (
+    <meshPhysicalMaterial
+      color="#d8f6ff"
+      transparent
+      opacity={0.2}
+      roughness={0.025}
+      metalness={0}
+      clearcoat={1}
+      clearcoatRoughness={0.03}
+      transmission={0.42}
+      thickness={0.28}
+      ior={1.45}
+      depthWrite={false}
+      side={THREE.DoubleSide}
+    />
+  );
+  const edgeMaterial = (
+    <meshStandardMaterial
+      color="#f6fdff"
+      emissive="#9defff"
+      emissiveIntensity={0.14}
+      transparent
+      opacity={0.58}
+      roughness={0.04}
+      metalness={0}
+      depthWrite={false}
+    />
+  );
+  const backEdgeMaterial = (
+    <meshStandardMaterial
+      color="#d9f6ff"
+      emissive="#8edff2"
+      emissiveIntensity={0.08}
+      transparent
+      opacity={0.34}
+      roughness={0.06}
+      metalness={0}
+      depthWrite={false}
+    />
+  );
+
   return (
-    <group ref={groupRef} renderOrder={2}>
-      <mesh ref={glassRef} geometry={bowlGeometry} raycast={nullRaycast}>
+    <group ref={groupRef} renderOrder={7}>
+      <mesh position={[0, 0, 0.57]} raycast={nullRaycast}>
+        <boxGeometry args={[2.1, 1.16, 0.035]} />
+        {panelMaterial}
+      </mesh>
+      <mesh ref={frontPanelRef} position={[0, 0, 0.61]} raycast={nullRaycast}>
+        <boxGeometry args={[2.08, 1.1, 0.012]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.055} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh position={[0, 0, -0.57]} raycast={nullRaycast}>
+        <boxGeometry args={[2.1, 1.16, 0.035]} />
         <meshPhysicalMaterial
-          color="#e6fbff"
+          color="#c8efff"
           transparent
-          opacity={0.24}
-          roughness={0.02}
+          opacity={0.13}
+          roughness={0.03}
           metalness={0}
           clearcoat={1}
-          clearcoatRoughness={0.08}
-          transmission={0.58}
-          thickness={0.36}
+          transmission={0.3}
+          thickness={0.18}
+          ior={1.45}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
       </mesh>
-      <mesh ref={rimRef} position={[0, 0.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.08, 0.72, 1]} raycast={nullRaycast}>
-        <torusGeometry args={[0.9, 0.052, 16, 96]} />
-        <meshStandardMaterial
-          color="#eefcff"
-          emissive="#b9f8ff"
-          emissiveIntensity={0.1}
-          roughness={0.18}
+      <mesh position={[-1.05, 0, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.035, 1.16, 1.14]} />
+        {panelMaterial}
+      </mesh>
+      <mesh position={[1.05, 0, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.035, 1.16, 1.14]} />
+        {panelMaterial}
+      </mesh>
+      <mesh position={[0, -0.58, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[2.12, 0.045, 1.16]} />
+        <meshPhysicalMaterial
+          color="#d7f5ff"
+          transparent
+          opacity={0.24}
+          roughness={0.025}
           metalness={0}
-          transparent
-          opacity={0.42}
+          clearcoat={1}
+          transmission={0.36}
+          thickness={0.18}
+          ior={1.45}
           depthWrite={false}
+          side={THREE.DoubleSide}
         />
       </mesh>
-      <mesh position={[0, 0.5, -0.08]} rotation={[Math.PI / 2, 0, 0]} scale={[1.04, 0.64, 1]} raycast={nullRaycast}>
-        <torusGeometry args={[0.86, 0.018, 10, 96]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
+
+      <mesh ref={frontTopEdgeRef} position={[0, 0.6, 0.6]} raycast={nullRaycast}>
+        <boxGeometry args={[2.18, 0.04, 0.05]} />
+        {edgeMaterial}
       </mesh>
-      <mesh ref={glowRef} position={[0, 0.54, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.12, 0.76, 1]} raycast={nullRaycast}>
-        <torusGeometry args={[0.98, 0.026, 10, 96]} />
-        <meshBasicMaterial
-          color="#fff5cf"
-          transparent
-          opacity={0.1}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
+      <mesh ref={backTopEdgeRef} position={[0, 0.6, -0.6]} raycast={nullRaycast}>
+        <boxGeometry args={[2.18, 0.036, 0.044]} />
+        {backEdgeMaterial}
       </mesh>
-      <mesh position={[0, -0.7, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[1.0, 0.72, 1]} raycast={nullRaycast}>
-        <torusGeometry args={[0.36, 0.036, 12, 72]} />
-        <meshStandardMaterial color="#d9f6ff" transparent opacity={0.26} roughness={0.12} depthWrite={false} />
+      <mesh ref={leftTopEdgeRef} position={[-1.08, 0.6, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.05, 0.04, 1.2]} />
+        {edgeMaterial}
       </mesh>
-      <mesh position={[0, -0.83, 0.03]} rotation={[Math.PI / 2, 0, 0]} scale={[1.28, 0.72, 1]} raycast={nullRaycast}>
-        <circleGeometry args={[0.78, 72]} />
-        <meshBasicMaterial color="#315c75" transparent opacity={0.12} depthWrite={false} />
+      <mesh ref={rightTopEdgeRef} position={[1.08, 0.6, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.05, 0.04, 1.2]} />
+        {edgeMaterial}
       </mesh>
-      {highlightGeometries.map((geometry, index) => (
-        <mesh key={index} geometry={geometry} raycast={nullRaycast}>
-          <meshBasicMaterial
-            color="#ffffff"
-            transparent
-            opacity={index === 0 ? 0.34 : 0.24}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-      ))}
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`${sx}-${sz}`} position={[sx * 1.08, 0, sz * 0.6]} raycast={nullRaycast}>
+            <boxGeometry args={[0.045, 1.2, 0.045]} />
+            {sx === 1 && sz === 1 ? edgeMaterial : backEdgeMaterial}
+          </mesh>
+        )),
+      )}
+      <mesh position={[0, -0.61, 0.6]} raycast={nullRaycast}>
+        <boxGeometry args={[2.18, 0.045, 0.05]} />
+        {edgeMaterial}
+      </mesh>
+      <mesh position={[0, -0.61, -0.6]} raycast={nullRaycast}>
+        <boxGeometry args={[2.18, 0.04, 0.045]} />
+        {backEdgeMaterial}
+      </mesh>
+      <mesh position={[-1.08, -0.61, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.05, 0.045, 1.2]} />
+        {backEdgeMaterial}
+      </mesh>
+      <mesh position={[1.08, -0.61, 0]} raycast={nullRaycast}>
+        <boxGeometry args={[0.05, 0.045, 1.2]} />
+        {edgeMaterial}
+      </mesh>
+
+      <mesh position={[-0.52, 0.04, 0.63]} rotation={[0, 0, -0.16]} raycast={nullRaycast}>
+        <boxGeometry args={[0.035, 0.82, 0.012]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.24} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh position={[0.62, -0.08, 0.63]} rotation={[0, 0, -0.16]} raycast={nullRaycast}>
+        <boxGeometry args={[0.024, 0.58, 0.012]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh position={[0, -0.46, 0.63]} raycast={nullRaycast}>
+        <boxGeometry args={[1.42, 0.018, 0.012]} />
+        <meshBasicMaterial color="#d9faff" transparent opacity={0.18} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
     </group>
   );
 }
@@ -2732,7 +2924,7 @@ function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky })
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={0} />
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={1} />
       <SkyParticles count={tier.particles} reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
-      <WishVessel depositRef={depositRef} reducedMotion={tier.reducedMotion} />
+      <GlassDisplayBox depositRef={depositRef} reducedMotion={tier.reducedMotion} />
       <CraneField
         count={tier.cranes}
         reducedMotion={tier.reducedMotion}
@@ -2879,6 +3071,14 @@ export default function App() {
     mouthX: 8.4,
     mouthY: -4.5,
     mouthZ: 3.8,
+    topY: -4.5,
+    bottomY: -6.5,
+    boxMinX: 7.1,
+    boxMaxX: 9.7,
+    boxMinY: -6.5,
+    boxMaxY: -4.5,
+    boxMinZ: 2.9,
+    boxMaxZ: 4.7,
     dropX: 0.65,
     dropY: -0.62,
     radiusX: 0.16,
