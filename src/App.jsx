@@ -79,14 +79,14 @@ const WISH_MESSAGES = [
 const SKY_KEYFRAMES = [
   {
     hour: 0,
-    top: '#071226',
-    middle: '#10234a',
-    horizon: '#243b63',
-    fog: '#172a4b',
-    ambient: 0.2,
-    hemiSky: '#8eaddf',
+    top: '#020713',
+    middle: '#07142b',
+    horizon: '#172d55',
+    fog: '#0c1c36',
+    ambient: 0.15,
+    hemiSky: '#7898cd',
     hemiGround: '#07101f',
-    hemiIntensity: 0.48,
+    hemiIntensity: 0.4,
     sun: '#cfe2ff',
     sunIntensity: 0.22,
     rim: '#7ea7e9',
@@ -181,14 +181,14 @@ const SKY_KEYFRAMES = [
   },
   {
     hour: 19.45,
-    top: '#152850',
-    middle: '#304c7a',
-    horizon: '#8d6b7e',
-    fog: '#495d7c',
-    ambient: 0.38,
+    top: '#071126',
+    middle: '#13294f',
+    horizon: '#594a70',
+    fog: '#263957',
+    ambient: 0.28,
     hemiSky: '#9fb9dc',
     hemiGround: '#20283d',
-    hemiIntensity: 0.68,
+    hemiIntensity: 0.58,
     sun: '#dbe8ff',
     sunIntensity: 0.55,
     rim: '#a9c5ff',
@@ -198,14 +198,14 @@ const SKY_KEYFRAMES = [
   },
   {
     hour: 21.2,
-    top: '#071226',
-    middle: '#10234a',
-    horizon: '#1d355f',
-    fog: '#182c4d',
-    ambient: 0.2,
-    hemiSky: '#86a9dc',
+    top: '#020713',
+    middle: '#07142b',
+    horizon: '#142a50',
+    fog: '#0b1c38',
+    ambient: 0.15,
+    hemiSky: '#7898cd',
     hemiGround: '#07101f',
-    hemiIntensity: 0.5,
+    hemiIntensity: 0.42,
     sun: '#d8e8ff',
     sunIntensity: 0.25,
     rim: '#86aff5',
@@ -215,14 +215,14 @@ const SKY_KEYFRAMES = [
   },
   {
     hour: 24,
-    top: '#071226',
-    middle: '#10234a',
-    horizon: '#243b63',
-    fog: '#172a4b',
-    ambient: 0.2,
-    hemiSky: '#8eaddf',
+    top: '#020713',
+    middle: '#07142b',
+    horizon: '#172d55',
+    fog: '#0c1c36',
+    ambient: 0.15,
+    hemiSky: '#7898cd',
     hemiGround: '#07101f',
-    hemiIntensity: 0.48,
+    hemiIntensity: 0.4,
     sun: '#cfe2ff',
     sunIntensity: 0.22,
     rim: '#7ea7e9',
@@ -389,7 +389,7 @@ const getContinuousSkyState = (timeHours) => {
   const moonArc = Math.sin(Math.PI * clamp01(moonT));
   const eveningStars = smoothstep(18.9, 21.1, time);
   const morningStars = 1 - smoothstep(4.7, 6.25, time);
-  const starOpacity = Math.max(eveningStars, morningStars) * 0.86;
+  const starOpacity = Math.max(eveningStars, morningStars);
   const twilight =
     smoothstep(4.85, 6.55, time) * (1 - smoothstep(6.55, 8.0, time)) +
     smoothstep(16.9, 18.6, time) * (1 - smoothstep(18.6, 20.2, time));
@@ -428,8 +428,8 @@ const getContinuousSkyState = (timeHours) => {
       y: -0.16 + sunArc * 0.78,
     },
     moonPosition: {
-      x: lerp(0.86, -0.78, clamp01(moonT)),
-      y: -0.1 + moonArc * 0.72,
+      x: lerp(0.72, -0.68, clamp01(moonT)),
+      y: 0.08 + moonArc * 0.66,
     },
   };
 };
@@ -731,57 +731,153 @@ function createCloudTexture(seed = 1) {
   };
 
   const canvas = document.createElement('canvas');
-  canvas.width = 768;
-  canvas.height = 320;
+  canvas.width = 384;
+  canvas.height = 384;
   const context = canvas.getContext('2d');
   context.clearRect(0, 0, canvas.width, canvas.height);
 
-  for (let cluster = 0; cluster < 9; cluster += 1) {
-    const cx = next() * canvas.width;
-    const cy = canvas.height * (0.22 + next() * 0.58);
-    const width = canvas.width * (0.16 + next() * 0.26);
-    const height = canvas.height * (0.08 + next() * 0.18);
+  const centerX = 184 + (next() - 0.5) * 36;
+  const centerY = 180 + (next() - 0.5) * 26;
+  const shadow = context.createRadialGradient(centerX, centerY + 50, 12, centerX, centerY + 34, 158 + next() * 36);
+  shadow.addColorStop(0, 'rgba(184,204,220,0.26)');
+  shadow.addColorStop(0.42, 'rgba(211,226,236,0.16)');
+  shadow.addColorStop(0.72, 'rgba(239,247,252,0.08)');
+  shadow.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = shadow;
+  context.fillRect(0, 0, canvas.width, canvas.height);
 
-    for (let puff = 0; puff < 28; puff += 1) {
-      const px = cx + (next() - 0.5) * width;
-      const py = cy + (next() - 0.5) * height;
-      const radius = canvas.width * (0.026 + next() * 0.07);
-      const alpha = 0.36 + next() * 0.38;
-      const gradient = context.createRadialGradient(px, py, 0, px, py, radius * (1.2 + next() * 0.9));
-      gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
-      gradient.addColorStop(0.42, `rgba(255,255,255,${alpha * 0.72})`);
-      gradient.addColorStop(0.68, `rgba(205,222,234,${alpha * 0.36})`);
-      gradient.addColorStop(0.84, `rgba(146,177,196,${alpha * 0.22})`);
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      context.fillStyle = gradient;
-      context.fillRect(px - radius, py - radius, radius * 2, radius * 2);
-    }
-
-    context.globalAlpha = 0.24 + next() * 0.18;
-    context.strokeStyle = '#ffffff';
-    context.lineWidth = canvas.height * (0.012 + next() * 0.014);
-    context.beginPath();
-    context.moveTo(cx - width * 0.58, cy + height * (0.12 + next() * 0.28));
-    context.bezierCurveTo(
-      cx - width * 0.18,
-      cy + height * (0.2 - next() * 0.24),
-      cx + width * 0.22,
-      cy + height * (0.08 + next() * 0.24),
-      cx + width * 0.64,
-      cy + height * (0.12 - next() * 0.18),
-    );
-    context.stroke();
-    context.globalAlpha = 1;
+  for (let i = 0; i < 7; i += 1) {
+    const angle = next() * TAU;
+    const distance = Math.pow(next(), 0.7) * 62;
+    const x = centerX + Math.cos(angle) * distance * 1.1;
+    const y = centerY + Math.sin(angle) * distance * 0.58 - next() * 28;
+    const radius = 74 + next() * 78;
+    const core = context.createRadialGradient(x - radius * 0.18, y - radius * 0.24, 0, x, y, radius);
+    core.addColorStop(0, 'rgba(255,255,255,0.96)');
+    core.addColorStop(0.34, 'rgba(255,255,255,0.72)');
+    core.addColorStop(0.64, 'rgba(244,249,253,0.34)');
+    core.addColorStop(0.84, 'rgba(218,233,244,0.12)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = core;
+    context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   }
+
+  const highlight = context.createRadialGradient(centerX - 54, centerY - 72, 0, centerX - 34, centerY - 58, 92);
+  highlight.addColorStop(0, 'rgba(255,255,255,0.86)');
+  highlight.addColorStop(0.48, 'rgba(255,255,255,0.28)');
+  highlight.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = highlight;
+  context.fillRect(0, 0, canvas.width, canvas.height);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
+}
+
+function createCloudLayerData(layer = 0) {
+  let value = (layer + 11) * 2654435761;
+  const next = () => {
+    value = (value * 1664525 + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+  const configs = [
+    { clouds: 9, yMin: 0.34, yMax: 0.74, width: 0.076, height: 0.036, speed: 0.008, z: FAR_Z + 56 },
+    { clouds: 8, yMin: 0.0, yMax: 0.54, width: 0.088, height: 0.043, speed: -0.012, z: FAR_Z + 42 },
+    { clouds: 5, yMin: -0.22, yMax: 0.34, width: 0.1, height: 0.05, speed: 0.016, z: FAR_Z + 30 },
+  ];
+  const config = configs[layer] ?? configs[0];
+  const clouds = [];
+  const variantCounts = [0, 0, 0];
+
+  const chooseScale = (cloudIndex) => {
+    if (layer === 2 && cloudIndex < 2) return 1.7 + next() * 0.72;
+    if (layer === 1 && cloudIndex === 1) return 1.35 + next() * 0.48;
+    const roll = next();
+    if (roll < 0.42) return 0.45 + next() * 0.3;
+    if (roll < 0.86) return 0.9 + next() * 0.45;
+    return 1.7 + next() * 0.55;
+  };
+
+  for (let cloudIndex = 0; cloudIndex < config.clouds; cloudIndex += 1) {
+    const clusterScale = chooseScale(cloudIndex);
+    const large = clusterScale > 1.55;
+    const small = clusterScale < 0.82;
+    let baseX = -1.82 + (cloudIndex / Math.max(1, config.clouds - 1)) * 3.64 + (next() - 0.5) * 0.38;
+    let baseY = config.yMin + next() * (config.yMax - config.yMin);
+    if (layer === 2 && cloudIndex === 0) {
+      baseX = -1.22 + (next() - 0.5) * 0.08;
+      baseY = -0.14 + (next() - 0.5) * 0.08;
+    } else if (layer === 2 && cloudIndex === 1) {
+      baseX = 0.76 + (next() - 0.5) * 0.08;
+      baseY = 0.12 + (next() - 0.5) * 0.08;
+    }
+    if (large && baseX < -0.38 && baseY > 0.22) {
+      baseY -= 0.22 + next() * 0.1;
+    }
+    if (large && Math.abs(baseX) < 0.48) {
+      baseX += baseX < 0 ? -0.58 : 0.58;
+      baseY += baseY > 0.1 ? -0.08 : 0.08;
+    }
+
+    const width = config.width * clusterScale * (0.86 + next() * 0.38);
+    const height = config.height * clusterScale * (0.82 + next() * 0.44);
+    const depth = config.z + (next() - 0.5) * 8;
+    const speedSign = Math.sign(config.speed) || 1;
+    const speed =
+      speedSign *
+      Math.abs(config.speed) *
+      (small ? 1.35 + next() * 0.45 : large ? 0.42 + next() * 0.22 : 0.78 + next() * 0.34);
+    const opacityMultiplier = (small ? 0.72 : large ? 0.92 : 0.84) * (0.84 + next() * 0.28);
+    const phase = next() * TAU;
+    const textureIndex = cloudIndex % 3;
+    const puffCount = small ? 5 + Math.floor(next() * 4) : large ? 18 + Math.floor(next() * 8) : 10 + Math.floor(next() * 6);
+    const puffs = [];
+
+    for (let puff = 0; puff < puffCount; puff += 1) {
+      const angle = next() * TAU;
+      const distance = Math.pow(next(), small ? 0.92 : 0.68);
+      const localX = Math.cos(angle) * distance * (small ? 0.38 : 0.52);
+      const localY = Math.sin(angle) * distance * (small ? 0.22 : 0.31) + (next() - 0.5) * 0.11;
+      const scale = 0.54 + next() * 0.66;
+      puffs.push({
+        localX,
+        localY,
+        scaleX: scale * (small ? 1.18 + next() * 0.5 : 0.9 + next() * 0.5),
+        scaleY: scale * (0.72 + next() * 0.42),
+        rotation: (next() - 0.5) * 0.38,
+        lift: (next() - 0.5) * 0.04,
+        renderIndex: variantCounts[textureIndex],
+      });
+      variantCounts[textureIndex] += 1;
+    }
+
+    clouds.push({
+      baseX,
+      baseY,
+      clusterScale,
+      width,
+      height,
+      depth,
+      speed,
+      opacityMultiplier,
+      phase,
+      textureIndex,
+      stretch: small ? 1.35 + next() * 0.45 : large ? 1.1 + next() * 0.36 : 1.14 + next() * 0.32,
+      shear: (next() - 0.5) * 0.24,
+      bobAmplitude: small ? 0.018 + next() * 0.012 : 0.01 + next() * 0.01,
+      bobSpeed: small ? 0.024 + next() * 0.014 : 0.012 + next() * 0.012,
+      breatheSpeed: 0.018 + next() * 0.018,
+      breatheAmount: small ? 0.012 : large ? 0.006 : 0.009,
+      puffs,
+    });
+  }
+
+  return { clouds, variantCounts };
 }
 
 function createRadialGlowTexture(innerColor, outerColor = 'rgba(255,255,255,0)') {
@@ -858,7 +954,7 @@ function createMoonTexture() {
   return texture;
 }
 
-function createStarGeometry(count, seed = 1, spread = 1) {
+function createStarGeometry(count, seed = 1) {
   let value = seed * 2654435761;
   const next = () => {
     value = (value * 1664525 + 1013904223) >>> 0;
@@ -867,22 +963,97 @@ function createStarGeometry(count, seed = 1, spread = 1) {
 
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
+  const alphas = new Float32Array(count);
+  const twinklePhases = new Float32Array(count);
+  const twinkleSpeeds = new Float32Array(count);
+  const twinkleStrengths = new Float32Array(count);
   const color = new THREE.Color();
-  for (let i = 0; i < count; i += 1) {
-    const radius = Math.pow(next(), 0.55);
-    positions[i * 3] = (next() - 0.5) * 160 * radius * spread;
-    positions[i * 3 + 1] = (next() - 0.5) * 96 * radius * spread;
-    positions[i * 3 + 2] = FAR_Z + 16 + next() * 34;
 
-    color.setHSL(0.58 + next() * 0.08, 0.18 + next() * 0.2, 0.76 + next() * 0.22);
+  const patches = [
+    { x: -0.42, y: 0.48, sx: 0.28, sy: 0.22, weight: 0.18 },
+    { x: 0.28, y: 0.56, sx: 0.34, sy: 0.24, weight: 0.2 },
+    { x: 0.72, y: 0.34, sx: 0.24, sy: 0.2, weight: 0.13 },
+    { x: -0.1, y: 0.16, sx: 0.42, sy: 0.2, weight: 0.16 },
+    { x: -0.82, y: 0.18, sx: 0.22, sy: 0.18, weight: 0.1 },
+    { x: 0.92, y: 0.66, sx: 0.18, sy: 0.16, weight: 0.08 },
+    { x: -0.18, y: 0.78, sx: 0.3, sy: 0.16, weight: 0.15 },
+  ];
+  const totalWeight = patches.reduce((sum, patch) => sum + patch.weight, 0);
+
+  const gaussian = () => {
+    const u = Math.max(0.0001, next());
+    const v = Math.max(0.0001, next());
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
+  };
+  const choosePatch = () => {
+    let roll = next() * totalWeight;
+    for (let i = 0; i < patches.length; i += 1) {
+      roll -= patches[i].weight;
+      if (roll <= 0) return patches[i];
+    }
+    return patches[patches.length - 1];
+  };
+  const isQuietZone = (x, y) => {
+    const titleZone = x < -0.54 && y > 0.42;
+    const clockZone = x > 0.66 && y > 0.66;
+    const moonHalo = ((x - 0.26) / 0.22) ** 2 + ((y - 0.64) / 0.18) ** 2 < 1;
+    return titleZone || clockZone || moonHalo || y < -0.2;
+  };
+
+  for (let i = 0; i < count; i += 1) {
+    let x = 0;
+    let y = 0;
+    let attempts = 0;
+    do {
+      const usePatch = next() < 0.84;
+      if (usePatch) {
+        const patch = choosePatch();
+        x = patch.x + gaussian() * patch.sx;
+        y = patch.y + gaussian() * patch.sy;
+      } else {
+        x = (next() - 0.5) * 2.35;
+        y = -0.08 + Math.pow(next(), 0.58) * 0.94;
+      }
+      attempts += 1;
+    } while ((x < -1.16 || x > 1.18 || y < -0.14 || y > 0.9 || isQuietZone(x, y)) && attempts < 16);
+
+    const horizonFade = smoothstep(-0.12, 0.18, y);
+    const magnitudeRoll = next();
+    const bright = magnitudeRoll > 0.955;
+    const medium = !bright && magnitudeRoll > 0.76;
+    const size = bright ? 1.75 + next() * 0.5 : medium ? 1.05 + next() * 0.28 : 0.55 + next() * 0.34;
+    const alpha = (bright ? 0.94 + next() * 0.06 : medium ? 0.58 + next() * 0.22 : 0.28 + next() * 0.26) * horizonFade;
+    const colorRoll = next();
+    if (colorRoll > 0.93) {
+      color.setHSL(0.1, 0.18, 0.88 + next() * 0.08);
+    } else if (colorRoll > 0.74) {
+      color.setHSL(0.6, 0.18, 0.86 + next() * 0.1);
+    } else {
+      color.setHSL(0.58, 0.05 + next() * 0.08, 0.86 + next() * 0.1);
+    }
+
+    positions[i * 3] = x * 78;
+    positions[i * 3 + 1] = y * 54;
+    positions[i * 3 + 2] = FAR_Z + 28 + next() * 16;
     colors[i * 3] = color.r;
     colors[i * 3 + 1] = color.g;
     colors[i * 3 + 2] = color.b;
+    sizes[i] = size;
+    alphas[i] = alpha;
+    twinklePhases[i] = next() * TAU;
+    twinkleSpeeds[i] = bright ? 0.32 + next() * 0.36 : medium ? 0.18 + next() * 0.26 : 0.08 + next() * 0.18;
+    twinkleStrengths[i] = bright ? 0.16 + next() * 0.08 : medium ? 0.08 + next() * 0.06 : 0.025 + next() * 0.045;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('starSize', new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute('starAlpha', new THREE.BufferAttribute(alphas, 1));
+  geometry.setAttribute('twinklePhase', new THREE.BufferAttribute(twinklePhases, 1));
+  geometry.setAttribute('twinkleSpeed', new THREE.BufferAttribute(twinkleSpeeds, 1));
+  geometry.setAttribute('twinkleStrength', new THREE.BufferAttribute(twinkleStrengths, 1));
   return geometry;
 }
 
@@ -2756,65 +2927,148 @@ function SkyBackdrop({ skyStyle }) {
   return (
     <mesh position={[0, 0, FAR_Z + 18]} renderOrder={-100} raycast={nullRaycast}>
       <planeGeometry args={[520, 330]} />
-      <meshBasicMaterial map={texture} depthWrite={false} depthTest={false} toneMapped={false} />
+      <meshBasicMaterial map={texture} depthWrite={false} depthTest={false} toneMapped={false} fog={false} />
     </mesh>
   );
 }
 
 function SkyCloudLayer({ skyStyle, reducedMotion, layer }) {
-  const meshRef = useRef();
+  const highlightRefs = useRef([]);
+  const shadowRefs = useRef([]);
   const { camera, size } = useThree();
-  const texture = useMemo(() => createCloudTexture(layer + 7), [layer]);
+  const textures = useMemo(() => [0, 1, 2].map((variant) => createCloudTexture(layer * 17 + variant + 7)), [layer]);
+  const cloudData = useMemo(() => createCloudLayerData(layer), [layer]);
+  const matrixObject = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(
     () => () => {
-      texture?.dispose();
+      textures.forEach((texture) => texture?.dispose());
     },
-    [texture],
+    [textures],
   );
 
   useFrame(({ clock }, delta) => {
-    if (!meshRef.current || !texture) return;
+    if (!textures.length) return;
 
     const elapsed = clock.getElapsedTime();
-    const z = layer === 0 ? FAR_Z + 54 : layer === 1 ? FAR_Z + 38 : FAR_Z + 22;
-    const distanceToCamera = camera.position.z - z;
     const fov = THREE.MathUtils.degToRad(camera.fov);
-    const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
-    const viewWidth = viewHeight * (size.width / size.height);
-    const layerConfig = [
-      { x: -0.2, y: 0.28, width: 0.88, height: 0.24, speed: 0.0012, opacity: 0.58, rotation: -0.025 },
-      { x: 0.18, y: 0.08, width: 0.78, height: 0.29, speed: -0.0018, opacity: 0.88, rotation: 0.03 },
-      { x: 0.04, y: -0.18, width: 0.92, height: 0.34, speed: 0.0024, opacity: 0.56, rotation: -0.012 },
-    ][layer];
+    const aspect = size.width / size.height;
     const motionScale = reducedMotion ? 0.16 : 1;
+    const layerOpacity = [0.68, 0.82, 0.58][layer] ?? 0.68;
+    const opacityPulse = 1 + Math.sin(elapsed * 0.028 + layer) * 0.03 * motionScale;
+    const daylightCloudBoost = 1 + (1 - skyStyle.night) * 0.38;
+    const cloudOpacity = skyStyle.cloudOpacity * layerOpacity * opacityPulse * daylightCloudBoost;
+    const nightSilver = skyStyle.night * 0.38;
 
-    texture.offset.x = wrap01(texture.offset.x + delta * layerConfig.speed * motionScale);
-    texture.offset.y = 0.02 * Math.sin(elapsed * 0.012 + layer);
-    meshRef.current.position.set(
-      camera.position.x + layerConfig.x * viewWidth * 0.5 + Math.sin(elapsed * 0.025 + layer) * 0.8 * motionScale,
-      camera.position.y + layerConfig.y * viewHeight * 0.5,
-      z,
-    );
-    meshRef.current.rotation.z = layerConfig.rotation + Math.sin(elapsed * 0.016 + layer) * 0.006 * motionScale;
-    meshRef.current.scale.set(viewWidth * layerConfig.width, viewHeight * layerConfig.height, 1);
-    meshRef.current.material.opacity =
-      skyStyle.cloudOpacity * layerConfig.opacity * (1 + Math.sin(elapsed * 0.02 + layer) * 0.04 * motionScale);
-    meshRef.current.material.color.set(skyStyle.cloudColor);
+    for (let cloudIndex = 0; cloudIndex < cloudData.clouds.length; cloudIndex += 1) {
+      const cloud = cloudData.clouds[cloudIndex];
+      const z = cloud.depth;
+      const distanceToCamera = camera.position.z - z;
+      const viewHeight = 2 * Math.tan(fov / 2) * distanceToCamera;
+      const viewWidth = viewHeight * aspect;
+      const wrapSpan = 3.8 + cloud.width * 2.8;
+      const wrappedX = ((((cloud.baseX + elapsed * cloud.speed * motionScale + wrapSpan * 0.5) % wrapSpan) + wrapSpan) % wrapSpan) - wrapSpan * 0.5;
+      const bob = Math.sin(elapsed * cloud.bobSpeed + cloud.phase) * cloud.bobAmplitude * motionScale;
+      const breathe = reducedMotion ? 1 : 1 + Math.sin(elapsed * cloud.breatheSpeed + cloud.phase) * cloud.breatheAmount;
+      const rotationDrift = reducedMotion ? 0 : Math.sin(elapsed * 0.01 + cloud.phase) * 0.012;
+      const variant = cloud.textureIndex;
+      const shadowMesh = shadowRefs.current[variant];
+      const highlightMesh = highlightRefs.current[variant];
+      if (!shadowMesh || !highlightMesh) continue;
+
+      for (let puffIndex = 0; puffIndex < cloud.puffs.length; puffIndex += 1) {
+        const puff = cloud.puffs[puffIndex];
+        const xNorm = wrappedX + (puff.localX + cloud.shear * puff.localY) * cloud.width;
+        const yNorm = cloud.baseY + puff.localY * cloud.height + puff.lift + bob;
+        const x = camera.position.x + xNorm * viewWidth * 0.5;
+        const y = camera.position.y + yNorm * viewHeight * 0.5;
+        const puffSize = viewWidth * cloud.width * 0.22;
+        const visibilityScale = 0.92 + cloud.opacityMultiplier * 0.08;
+        const sx = puffSize * puff.scaleX * cloud.stretch * breathe * visibilityScale;
+        const sy = puffSize * puff.scaleY * (1 / Math.sqrt(cloud.stretch)) * breathe * visibilityScale;
+
+        matrixObject.position.set(x, y - viewHeight * cloud.height * 0.17, z + 0.15);
+        matrixObject.rotation.set(0, 0, puff.rotation + rotationDrift);
+        matrixObject.scale.set(sx * 1.1, sy * 0.92, 1);
+        matrixObject.updateMatrix();
+        shadowMesh.setMatrixAt(puff.renderIndex, matrixObject.matrix);
+
+        matrixObject.position.set(x, y, z);
+        matrixObject.rotation.set(0, 0, puff.rotation + rotationDrift);
+        matrixObject.scale.set(sx, sy, 1);
+        matrixObject.updateMatrix();
+        highlightMesh.setMatrixAt(puff.renderIndex, matrixObject.matrix);
+      }
+    }
+
+    for (let variant = 0; variant < textures.length; variant += 1) {
+      const shadowMesh = shadowRefs.current[variant];
+      const highlightMesh = highlightRefs.current[variant];
+      if (!shadowMesh || !highlightMesh) continue;
+
+      shadowMesh.instanceMatrix.needsUpdate = true;
+      highlightMesh.instanceMatrix.needsUpdate = true;
+      shadowMesh.material.opacity = cloudOpacity * (0.11 + nightSilver * 0.08);
+      highlightMesh.material.opacity = cloudOpacity * (0.78 + skyStyle.night * 0.08);
+      shadowMesh.material.color.set(skyStyle.night > 0.5 ? '#9fb2cb' : '#b4c6d4');
+      highlightMesh.material.color.set(skyStyle.cloudColor);
+    }
   });
 
+  const renderOrder = [-92, -74, -62][layer] ?? -80;
+
   return (
-    <mesh ref={meshRef} raycast={nullRaycast} renderOrder={-80}>
-      <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial
-        map={texture}
-        color={skyStyle.cloudColor}
-        transparent
-        opacity={0.2}
-        depthWrite={false}
-        depthTest={false}
-      />
-    </mesh>
+    <>
+      {textures.map((texture, variant) => {
+        const count = Math.max(1, cloudData.variantCounts[variant] ?? 1);
+        return (
+          <group key={`${layer}-${variant}`}>
+            <instancedMesh
+              ref={(node) => {
+                shadowRefs.current[variant] = node;
+              }}
+              args={[undefined, undefined, count]}
+              raycast={nullRaycast}
+              frustumCulled={false}
+              renderOrder={renderOrder}
+            >
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial
+                map={texture}
+                color="#b4c6d4"
+                transparent
+                opacity={0}
+                depthWrite={false}
+                depthTest={false}
+                alphaTest={0.045}
+                fog={false}
+              />
+            </instancedMesh>
+            <instancedMesh
+              ref={(node) => {
+                highlightRefs.current[variant] = node;
+              }}
+              args={[undefined, undefined, count]}
+              raycast={nullRaycast}
+              frustumCulled={false}
+              renderOrder={renderOrder + 1}
+            >
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial
+                map={texture}
+                color={skyStyle.cloudColor}
+                transparent
+                opacity={0}
+                depthWrite={false}
+                depthTest={false}
+                alphaTest={0.052}
+                fog={false}
+              />
+            </instancedMesh>
+          </group>
+        );
+      })}
+    </>
   );
 }
 
@@ -2873,6 +3127,7 @@ function SkySun({ skyStyle, reducedMotion }) {
           depthTest={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
       <mesh ref={diskRef} raycast={nullRaycast}>
@@ -2885,6 +3140,7 @@ function SkySun({ skyStyle, reducedMotion }) {
           depthTest={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
     </group>
@@ -2924,22 +3180,22 @@ function SkyMoon({ skyStyle, reducedMotion }) {
       camera.position.y + skyStyle.moonPosition.y * viewHeight * 0.5 + floatY,
       z,
     );
-    if (baseRef.current) baseRef.current.scale.setScalar(3.35);
-    if (diskRef.current) diskRef.current.scale.setScalar(3.32);
-    if (glowRef.current) glowRef.current.scale.setScalar(14.5);
+    if (baseRef.current) baseRef.current.scale.setScalar(4.8);
+    if (diskRef.current) diskRef.current.scale.setScalar(4.7);
+    if (glowRef.current) glowRef.current.scale.setScalar(25);
     if (baseRef.current?.material) {
-      baseRef.current.material.opacity = 0.96 * skyStyle.moonVisibility;
+      baseRef.current.material.opacity = 1.0 * skyStyle.moonVisibility;
     }
     if (diskRef.current?.material) {
-      diskRef.current.material.opacity = 0.42 * skyStyle.moonVisibility;
+      diskRef.current.material.opacity = 0.58 * skyStyle.moonVisibility;
     }
     if (glowRef.current?.material) {
-      glowRef.current.material.opacity = 0.68 * skyStyle.moonVisibility;
+      glowRef.current.material.opacity = 0.84 * skyStyle.moonVisibility;
     }
   });
 
   return (
-    <group ref={groupRef} renderOrder={-69}>
+    <group ref={groupRef} renderOrder={-58}>
       <mesh ref={glowRef} raycast={nullRaycast}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial
@@ -2950,6 +3206,7 @@ function SkyMoon({ skyStyle, reducedMotion }) {
           depthTest={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
       <mesh ref={baseRef} raycast={nullRaycast}>
@@ -2962,6 +3219,7 @@ function SkyMoon({ skyStyle, reducedMotion }) {
           depthTest={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
       <mesh ref={diskRef} raycast={nullRaycast}>
@@ -2975,82 +3233,93 @@ function SkyMoon({ skyStyle, reducedMotion }) {
           depthTest={false}
           blending={THREE.AdditiveBlending}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
     </group>
   );
 }
 
-function SkyStarField({ count, reducedMotion, skyStyle }) {
-  const tinyRef = useRef();
-  const mediumRef = useRef();
-  const brightRef = useRef();
-  const tinyGeometry = useMemo(() => createStarGeometry(Math.max(80, Math.floor(count * 0.68)), 17, 1.05), [count]);
-  const mediumGeometry = useMemo(() => createStarGeometry(Math.max(24, Math.floor(count * 0.23)), 41, 0.9), [count]);
-  const brightGeometry = useMemo(() => createStarGeometry(Math.max(8, Math.floor(count * 0.07)), 83, 0.76), [count]);
+function SkyStarField({ reducedMotion, skyStyle }) {
+  const materialRef = useRef();
+  const { size } = useThree();
+  const starCount = size.width < 720 ? 82 : 142;
+  const starGeometry = useMemo(() => createStarGeometry(starCount, size.width < 720 ? 113 : 109), [starCount, size.width]);
+  const starUniforms = useMemo(
+    () => ({
+      uOpacity: { value: 0 },
+      uTime: { value: 0 },
+      uTwinkle: { value: 0 },
+      uPixelRatio: { value: typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2) },
+    }),
+    [],
+  );
 
   useEffect(
     () => () => {
-      tinyGeometry.dispose();
-      mediumGeometry.dispose();
-      brightGeometry.dispose();
+      starGeometry.dispose();
     },
-    [tinyGeometry, mediumGeometry, brightGeometry],
+    [starGeometry],
   );
 
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock }) => {
     const elapsed = clock.getElapsedTime();
-    const twinkle = reducedMotion ? 1 : 0.88 + Math.sin(elapsed * 0.9) * 0.12;
-    const opacity = skyStyle.starOpacity * twinkle;
-    if (!reducedMotion) {
-      if (tinyRef.current) tinyRef.current.rotation.z += delta * 0.0016;
-      if (mediumRef.current) mediumRef.current.rotation.z -= delta * 0.0011;
-      if (brightRef.current) brightRef.current.rotation.z += delta * 0.0007;
+    if (materialRef.current) {
+      materialRef.current.uniforms.uOpacity.value = skyStyle.starOpacity;
+      materialRef.current.uniforms.uTime.value = elapsed;
+      materialRef.current.uniforms.uTwinkle.value = reducedMotion ? 0.12 : 1;
+      materialRef.current.uniforms.uPixelRatio.value = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     }
-    if (tinyRef.current?.material) tinyRef.current.material.opacity = opacity * 0.55;
-    if (mediumRef.current?.material) mediumRef.current.material.opacity = opacity * 0.78;
-    if (brightRef.current?.material) brightRef.current.material.opacity = opacity;
   });
 
   return (
-    <>
-      <points ref={tinyRef} geometry={tinyGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-90}>
-        <pointsMaterial
-          size={0.045}
-          sizeAttenuation
-          vertexColors
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </points>
-      <points ref={mediumRef} geometry={mediumGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-89}>
-        <pointsMaterial
-          size={0.085}
-          sizeAttenuation
-          vertexColors
-          transparent
-          opacity={0}
-          depthWrite={false}
-          depthTest={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </points>
-      <points ref={brightRef} geometry={brightGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-88}>
-      <pointsMaterial
-        size={0.14}
-        sizeAttenuation
-        vertexColors
+    <points geometry={starGeometry} frustumCulled={false} raycast={nullRaycast} renderOrder={-96}>
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={starUniforms}
         transparent
-        opacity={0}
         depthWrite={false}
         depthTest={false}
-        blending={THREE.AdditiveBlending}
+        fog={false}
+        blending={THREE.NormalBlending}
+        vertexShader={`
+          attribute vec3 color;
+          attribute float starSize;
+          attribute float starAlpha;
+          attribute float twinklePhase;
+          attribute float twinkleSpeed;
+          attribute float twinkleStrength;
+          uniform float uOpacity;
+          uniform float uTime;
+          uniform float uTwinkle;
+          uniform float uPixelRatio;
+          varying vec3 vColor;
+          varying float vAlpha;
+
+          void main() {
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            float twinkle = 1.0 + sin(uTime * twinkleSpeed + twinklePhase) * twinkleStrength * uTwinkle;
+            vColor = color;
+            vAlpha = starAlpha * uOpacity * twinkle;
+            gl_Position = projectionMatrix * mvPosition;
+            gl_PointSize = clamp(starSize * uPixelRatio * (300.0 / max(80.0, -mvPosition.z)), 0.55, 2.8);
+          }
+        `}
+        fragmentShader={`
+          varying vec3 vColor;
+          varying float vAlpha;
+
+          void main() {
+            float d = distance(gl_PointCoord, vec2(0.5));
+            float softPoint = 1.0 - smoothstep(0.12, 0.5, d);
+            float core = 1.0 - smoothstep(0.0, 0.18, d);
+            float alpha = vAlpha * (softPoint * 0.72 + core * 0.28);
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(vColor, alpha);
+          }
+        `}
       />
-      </points>
-    </>
+    </points>
   );
 }
 
@@ -3378,7 +3647,7 @@ function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky })
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={0} />
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={1} />
       <SkyCloudLayer skyStyle={skyStyle} reducedMotion={tier.reducedMotion} layer={2} />
-      <SkyStarField count={tier.particles} reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
+      <SkyStarField reducedMotion={tier.reducedMotion} skyStyle={skyStyle} />
       <GlassDisplayBox depositRef={depositRef} reducedMotion={tier.reducedMotion} />
       <CraneField
         count={tier.cranes}
