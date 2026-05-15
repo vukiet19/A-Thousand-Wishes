@@ -145,7 +145,11 @@ h1 {
 .note-close:hover,
 .note-close:focus-visible,
 .history-clear:hover,
-.history-clear:focus-visible {
+.history-clear:focus-visible,
+.sidebar-tabs button:hover,
+.sidebar-tabs button:focus-visible,
+.celestial-actions button:hover,
+.celestial-actions button:focus-visible {
   outline: none;
   background: rgba(255, 255, 255, 0.28);
 }
@@ -188,6 +192,11 @@ h1 {
 .gmt-clock time span:first-child {
   font-size: 15px;
   font-weight: 700;
+}
+
+.gmt-clock.is-simulated {
+  border-color: rgba(238, 211, 148, 0.52);
+  background: rgba(80, 60, 37, 0.2);
 }
 
 .sidebar-scrim {
@@ -274,6 +283,35 @@ h1 {
   cursor: pointer;
 }
 
+.sidebar-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 22px 0 8px;
+  padding: 4px;
+  border: 1px solid rgba(86, 105, 124, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.sidebar-tabs button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(43, 65, 90, 0.72);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sidebar-tabs button.is-active {
+  color: #2b4057;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 20px rgba(56, 79, 108, 0.12);
+}
+
 .history-groups {
   display: grid;
   gap: 16px;
@@ -335,6 +373,141 @@ h1 {
 .history-empty {
   margin-top: 8px;
   color: rgba(39, 64, 92, 0.48);
+}
+
+.celestial-panel {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  color: #2f3f56;
+}
+
+.celestial-copy {
+  justify-self: stretch;
+}
+
+.celestial-copy h3 {
+  margin: 0;
+  color: #4d3829;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.celestial-copy p:last-child {
+  margin: 8px 0 0;
+  color: rgba(48, 67, 91, 0.66);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.celestial-dial {
+  position: relative;
+  width: min(276px, calc(100vw - 86px));
+  aspect-ratio: 1;
+  touch-action: none;
+  cursor: grab;
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, var(--dial-sky-top), var(--dial-sky-middle) 52%, var(--dial-sky-horizon)) border-box,
+    radial-gradient(circle at 50% 46%, rgba(255, 250, 224, 0.74), rgba(184, 129, 72, 0.16) 68%, rgba(75, 49, 31, 0.22)),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0));
+  border: 3px solid transparent;
+  box-shadow:
+    0 18px 42px rgba(67, 82, 103, 0.2),
+    inset 0 0 0 1px rgba(90, 61, 35, 0.2),
+    inset 0 0 24px rgba(255, 244, 205, 0.72);
+}
+
+.celestial-dial:focus-visible {
+  outline: 2px solid rgba(118, 89, 48, 0.5);
+  outline-offset: 5px;
+}
+
+.celestial-dial:active {
+  cursor: grabbing;
+}
+
+.celestial-dial svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 10px 18px rgba(61, 51, 43, 0.16));
+}
+
+.celestial-dial.is-animating svg {
+  animation: dial-breathe 720ms ease-in-out infinite alternate;
+}
+
+.celestial-readout {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 9px 18px;
+  border: 1px solid rgba(93, 62, 38, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.celestial-readout span {
+  color: #4b3323;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.celestial-readout strong {
+  color: rgba(71, 55, 44, 0.62);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.celestial-readout em {
+  color: rgba(70, 52, 39, 0.58);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.celestial-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  width: 100%;
+}
+
+.celestial-actions button {
+  min-height: 42px;
+  border: 1px solid rgba(96, 65, 41, 0.18);
+  border-radius: 999px;
+  color: #3c2b20;
+  background: rgba(255, 255, 255, 0.46);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.celestial-actions button:first-child {
+  color: #fff7de;
+  background: linear-gradient(135deg, #75512f, #b9874b);
+  box-shadow: 0 10px 24px rgba(94, 65, 40, 0.18);
+}
+
+.celestial-actions button:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+@keyframes dial-breathe {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    transform: rotate(2deg) scale(1.012);
+  }
 }
 
 .note-backdrop {
@@ -490,6 +663,19 @@ h1 {
     padding: 18px;
   }
 
+  .sidebar-tabs {
+    grid-template-columns: 1fr;
+    border-radius: 18px;
+  }
+
+  .celestial-dial {
+    width: min(252px, calc(100vw - 76px));
+  }
+
+  .celestial-copy h3 {
+    font-size: 24px;
+  }
+
   .paper-note {
     min-height: 236px;
     padding: 32px 24px 26px;
@@ -523,7 +709,9 @@ h1 {
   }
 
   .history-sidebar,
-  .sidebar-scrim {
+  .sidebar-scrim,
+  .celestial-dial.is-animating svg {
     transition: none;
+    animation: none;
   }
 }

@@ -29,6 +29,12 @@ const GRAB_MAX_Z = 8;
 const RELEASE_MOMENTUM_DURATION = 0.58;
 const GMT7_OFFSET_MS = 7 * 60 * 60 * 1000;
 const HISTORY_STORAGE_KEY = 'a-thousand-wishes:deposited-cranes:v1';
+const TIME_MODE_REAL = 'real';
+const TIME_MODE_SELECTING = 'selecting';
+const TIME_MODE_ANIMATING = 'animating';
+const TIME_MODE_SIMULATED = 'simulated';
+const MINUTE_MS = 60 * 1000;
+const DAY_MINUTES = 24 * 60;
 
 const CRANE_WHITE = 0;
 const CRANE_RED = 1;
@@ -332,6 +338,28 @@ const getGMT7Parts = (date = new Date()) => {
 
 const pad2 = (value) => String(value).padStart(2, '0');
 
+const snapOffsetMinutes = (minutes) => clamp(Math.round(minutes / 5) * 5, 0, DAY_MINUTES);
+
+const minutesToTimeLabel = (minutes, withSeconds = false) => {
+  const normalized = ((minutes % DAY_MINUTES) + DAY_MINUTES) % DAY_MINUTES;
+  const hours = Math.floor(normalized / 60);
+  const wholeMinutes = Math.floor(normalized % 60);
+  return withSeconds ? `${pad2(hours)}:${pad2(wholeMinutes)}:00` : `${pad2(hours)}:${pad2(wholeMinutes)}`;
+};
+
+const getMinutesFromParts = (parts) => parts.hours * 60 + parts.minutes + parts.seconds / 60;
+
+const createGMT7Date = ({ year, month, day, hours, minutes, seconds = 0 }) =>
+  new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds) - GMT7_OFFSET_MS);
+
+const getDateAtGMT7Time = (baseDate, timeHours) => {
+  const parts = getGMT7Parts(baseDate);
+  const hours = Math.floor(timeHours);
+  const minutes = Math.floor((timeHours % 1) * 60);
+  const seconds = Math.round((((timeHours % 1) * 60) % 1) * 60);
+  return createGMT7Date({ ...parts, hours, minutes, seconds });
+};
+
 const formatGMT7Display = (date = new Date(), withSeconds = false) => {
   const parts = getGMT7Parts(date);
   const time = `${pad2(parts.hours)}:${pad2(parts.minutes)}${
@@ -394,6 +422,7 @@ const getContinuousSkyState = (timeHours) => {
     smoothstep(4.85, 6.55, time) * (1 - smoothstep(6.55, 8.0, time)) +
     smoothstep(16.9, 18.6, time) * (1 - smoothstep(18.6, 20.2, time));
   const night = Math.max(smoothstep(19.25, 21.0, time), 1 - smoothstep(4.6, 6.05, time));
+  const craneNightLift = Math.max(smoothstep(20.8, 21.45, time), 1 - smoothstep(4.15, 5.05, time));
   const moonVisibility = clamp01(night * 0.95 + twilight * 0.22);
 
   return {
@@ -422,6 +451,7 @@ const getContinuousSkyState = (timeHours) => {
     moonVisibility,
     starOpacity,
     night,
+    craneNightLift,
     twilight: clamp01(twilight),
     sunPosition: {
       x: lerp(-0.78, 0.82, sunT),
@@ -494,8 +524,26 @@ const isInteractionInDropZone = (interaction, vessel) => {
   return dx * dx + dy * dy <= 1;
 };
 
-function useGMT7Clock() {
+function useCelestialTime(reducedMotion) {
   const [now, setNow] = useState(() => new Date());
+  const [mode, setMode] = useState(TIME_MODE_REAL);
+  const [selectedOffsetMinutes, setSelectedOffsetMinutes] = useState(0);
+  const [animationDate, setAnimationDate] = useState(null);
+  const displayedDateRef = useRef(now);
+  const selectionBaseDateRef = useRef(now);
+  const simulationRef = useRef({
+    baseDate: null,
+    baseRealMs: 0,
+  });
+  const animationRef = useRef({
+    frame: 0,
+    startMs: 0,
+    targetMs: 0,
+    startedAt: 0,
+    duration: 0,
+  });
+  const selectionBaseModeRef = useRef(TIME_MODE_REAL);
+  const previewTimeHours = useMemo(() => getSkyPreviewTimeHours(), []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -505,22 +553,179 @@ function useGMT7Clock() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(
+    () => () => {
+      if (animationRef.current.frame) window.cancelAnimationFrame(animationRef.current.frame);
+    },
+    [],
+  );
+
+  const displayedDate = useMemo(() => {
+    if (mode === TIME_MODE_ANIMATING && animationDate) return animationDate;
+    if (mode === TIME_MODE_SELECTING && selectionBaseDateRef.current) return selectionBaseDateRef.current;
+    if (mode === TIME_MODE_SIMULATED && simulationRef.current.baseDate) {
+      return new Date(simulationRef.current.baseDate.getTime() + (now.getTime() - simulationRef.current.baseRealMs));
+    }
+    return now;
+  }, [animationDate, mode, now]);
+
+  useEffect(() => {
+    displayedDateRef.current = displayedDate;
+  }, [displayedDate]);
+
+  const beginSelecting = useCallback(() => {
+    const currentDate =
+      previewTimeHours != null && mode === TIME_MODE_REAL
+        ? getDateAtGMT7Time(now, previewTimeHours)
+        : displayedDateRef.current;
+    selectionBaseModeRef.current = mode === TIME_MODE_SIMULATED ? TIME_MODE_SIMULATED : TIME_MODE_REAL;
+    selectionBaseDateRef.current = currentDate;
+    setSelectedOffsetMinutes(0);
+    setMode(TIME_MODE_SELECTING);
+  }, [mode, now, previewTimeHours]);
+
+  const cancelSelecting = useCallback(() => {
+    setMode((currentMode) =>
+      currentMode === TIME_MODE_SELECTING ? selectionBaseModeRef.current : currentMode,
+    );
+  }, []);
+
+  const returnToRealTime = useCallback(() => {
+    if (animationRef.current.frame) window.cancelAnimationFrame(animationRef.current.frame);
+    animationRef.current.frame = 0;
+    simulationRef.current.baseDate = null;
+    simulationRef.current.baseRealMs = 0;
+    setAnimationDate(null);
+    setNow(new Date());
+    setMode(TIME_MODE_REAL);
+  }, []);
+
+  const confirmSelection = useCallback(() => {
+    if (mode === TIME_MODE_ANIMATING) return;
+
+    const startDate = mode === TIME_MODE_SELECTING ? selectionBaseDateRef.current : displayedDateRef.current;
+    const deltaMs = snapOffsetMinutes(selectedOffsetMinutes) * MINUTE_MS;
+    const targetDate = new Date(startDate.getTime() + deltaMs);
+
+    if (animationRef.current.frame) window.cancelAnimationFrame(animationRef.current.frame);
+
+    if (deltaMs < 1000) {
+      simulationRef.current.baseDate = targetDate;
+      simulationRef.current.baseRealMs = Date.now();
+      selectionBaseDateRef.current = targetDate;
+      setAnimationDate(null);
+      setSelectedOffsetMinutes(0);
+      setMode(TIME_MODE_SIMULATED);
+      return;
+    }
+
+    const offsetRatio = clamp01(deltaMs / (DAY_MINUTES * MINUTE_MS));
+    const duration = reducedMotion ? lerp(1.4, 2.4, offsetRatio) : lerp(5, 10, offsetRatio);
+    animationRef.current.startMs = startDate.getTime();
+    animationRef.current.targetMs = targetDate.getTime();
+    animationRef.current.startedAt = performance.now();
+    animationRef.current.duration = duration * 1000;
+    setMode(TIME_MODE_ANIMATING);
+
+    const tick = (timestamp) => {
+      const animation = animationRef.current;
+      const progress = clamp01((timestamp - animation.startedAt) / animation.duration);
+      const eased = progress < 0.5 ? 4 * progress * progress * progress : 1 - (-2 * progress + 2) ** 3 / 2;
+      const nextMs = lerp(animation.startMs, animation.targetMs, eased);
+      setAnimationDate(new Date(nextMs));
+
+      if (progress < 1) {
+        animation.frame = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      animation.frame = 0;
+      const completedDate = new Date(animation.targetMs);
+      simulationRef.current.baseDate = completedDate;
+      simulationRef.current.baseRealMs = Date.now();
+      selectionBaseDateRef.current = completedDate;
+      setAnimationDate(null);
+      setSelectedOffsetMinutes(0);
+      setMode(TIME_MODE_SIMULATED);
+    };
+
+    animationRef.current.frame = window.requestAnimationFrame(tick);
+  }, [mode, reducedMotion, selectedOffsetMinutes]);
+
   return useMemo(() => {
+    const displayDate = displayedDate;
     const parts = getGMT7Parts(now);
-    const previewTimeHours = getSkyPreviewTimeHours();
-    const skyTimeHours = previewTimeHours ?? getSkyTimeHours(parts);
+    const displayParts = getGMT7Parts(displayDate);
+    const displayMinutes = getMinutesFromParts(displayParts);
+    const isRealClock = mode === TIME_MODE_REAL;
+    const skyTimeHours =
+      previewTimeHours != null && mode === TIME_MODE_REAL
+        ? previewTimeHours
+        : getSkyTimeHours(displayParts);
     const skyStyle = getContinuousSkyState(skyTimeHours);
+    const baseDate =
+      mode === TIME_MODE_SELECTING || mode === TIME_MODE_ANIMATING
+        ? selectionBaseDateRef.current
+        : displayDate;
+    const snappedOffset = snapOffsetMinutes(selectedOffsetMinutes);
+    const targetDate = new Date(baseDate.getTime() + snappedOffset * MINUTE_MS);
+    const targetParts = getGMT7Parts(targetDate);
+    const baseParts = getGMT7Parts(baseDate);
+    const targetMinutes = getMinutesFromParts(targetParts);
+    const targetSkyStyle =
+      mode === TIME_MODE_ANIMATING
+        ? getContinuousSkyState(displayMinutes / 60)
+        : getContinuousSkyState(targetMinutes / 60);
+    const sameTargetDay =
+      baseParts.year === targetParts.year &&
+      baseParts.month === targetParts.month &&
+      baseParts.day === targetParts.day;
+    const targetDeltaMinutes = Math.max(0, (targetDate.getTime() - displayDate.getTime()) / MINUTE_MS);
+    const dialOffsetMinutes =
+      mode === TIME_MODE_ANIMATING
+        ? clamp((displayDate.getTime() - selectionBaseDateRef.current.getTime()) / MINUTE_MS, 0, DAY_MINUTES)
+        : snappedOffset;
     return {
       parts,
+      displayParts,
       phase: skyStyle.key,
       skyTimeHours,
       dayProgress: skyStyle.dayProgress,
       skyStyle,
       previewTimeHours,
+      mode,
+      isRealClock,
+      selectedOffsetMinutes: snappedOffset,
+      dialOffsetMinutes,
+      selectedTargetMinutes: targetMinutes,
+      selectedTimeLabel: `${pad2(targetParts.hours)}:${pad2(targetParts.minutes)}`,
+      targetDayLabel: snappedOffset < 1 ? 'Now' : sameTargetDay ? 'Today' : 'Tomorrow',
+      targetDeltaMinutes,
+      targetOffsetLabel: `+${Math.floor(snappedOffset / 60)}h ${pad2(snappedOffset % 60)}m`,
+      targetSkyStyle,
+      displayedDate: displayDate,
+      displayMinutes,
       dateLabel: `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`,
-      timeLabel: `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`,
+      timeLabel: isRealClock
+        ? `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
+        : `${pad2(displayParts.hours)}:${pad2(displayParts.minutes)}`,
+      beginSelecting,
+      cancelSelecting,
+      setSelectedOffsetMinutes: (minutes) => setSelectedOffsetMinutes(snapOffsetMinutes(minutes)),
+      confirmSelection,
+      returnToRealTime,
     };
-  }, [now]);
+  }, [
+    beginSelecting,
+    cancelSelecting,
+    confirmSelection,
+    displayedDate,
+    mode,
+    now,
+    previewTimeHours,
+    returnToRealTime,
+    selectedOffsetMinutes,
+  ]);
 }
 
 function usePerformanceTier() {
@@ -662,15 +867,16 @@ function createPaperTextures() {
 function createSkyTexture(skyStyle) {
   if (typeof document === 'undefined') return null;
 
-  const width = 96;
-  const height = 512;
+  const width = 1024;
+  const height = 1536;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
   const gradient = context.createLinearGradient(0, 0, 0, height);
   gradient.addColorStop(0, skyStyle.top);
-  gradient.addColorStop(0.48, skyStyle.middle);
+  gradient.addColorStop(0.42, skyStyle.middle);
+  gradient.addColorStop(0.72, mixColor(skyStyle.middle, skyStyle.horizon, 0.58));
   gradient.addColorStop(1, skyStyle.horizon);
   context.fillStyle = gradient;
   context.fillRect(0, 0, width, height);
@@ -693,15 +899,19 @@ function createSkyTexture(skyStyle) {
   context.fillStyle = moonGlow;
   context.fillRect(0, 0, width, height);
 
-  const horizonHaze = context.createLinearGradient(0, height * 0.54, 0, height);
+  const horizonHaze = context.createLinearGradient(0, height * 0.44, 0, height);
   horizonHaze.addColorStop(0, 'rgba(255,255,255,0)');
-  horizonHaze.addColorStop(1, `rgba(255,238,205,${0.14 * (1 - skyStyle.night) + skyStyle.twilight * 0.1})`);
+  horizonHaze.addColorStop(0.34, `rgba(255,248,220,${0.018 * (1 - skyStyle.night)})`);
+  horizonHaze.addColorStop(0.68, `rgba(255,238,205,${0.075 * (1 - skyStyle.night) + skyStyle.twilight * 0.055})`);
+  horizonHaze.addColorStop(1, `rgba(255,229,190,${0.11 * (1 - skyStyle.night) + skyStyle.twilight * 0.065})`);
   context.fillStyle = horizonHaze;
   context.fillRect(0, 0, width, height);
 
-  const coolHaze = context.createLinearGradient(0, height * 0.62, 0, height);
+  const coolHaze = context.createLinearGradient(0, height * 0.48, 0, height);
   coolHaze.addColorStop(0, 'rgba(255,255,255,0)');
-  coolHaze.addColorStop(1, `rgba(92,128,180,${0.12 * skyStyle.night})`);
+  coolHaze.addColorStop(0.46, `rgba(96,132,184,${0.025 * skyStyle.night})`);
+  coolHaze.addColorStop(0.82, `rgba(92,128,180,${0.07 * skyStyle.night})`);
+  coolHaze.addColorStop(1, `rgba(88,122,174,${0.095 * skyStyle.night})`);
   context.fillStyle = coolHaze;
   context.fillRect(0, 0, width, height);
 
@@ -710,6 +920,19 @@ function createSkyTexture(skyStyle) {
   vignette.addColorStop(1, `rgba(4,16,36,${0.1 + skyStyle.night * 0.18})`);
   context.fillStyle = vignette;
   context.fillRect(0, 0, width, height);
+
+  const image = context.getImageData(0, 0, width, height);
+  const pixels = image.data;
+  let noise = 2166136261;
+  for (let i = 0; i < pixels.length; i += 4) {
+    noise ^= i;
+    noise = Math.imul(noise, 16777619);
+    const amount = ((noise >>> 24) - 128) * 0.018;
+    pixels[i] = clamp(pixels[i] + amount, 0, 255);
+    pixels[i + 1] = clamp(pixels[i + 1] + amount, 0, 255);
+    pixels[i + 2] = clamp(pixels[i + 2] + amount, 0, 255);
+  }
+  context.putImageData(image, 0, 0);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -1551,7 +1774,7 @@ function setCraneColor(meshes, data, color, index) {
   }
 }
 
-function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingRef, onDeposit }) {
+function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingRef, onDeposit, skyStyle }) {
   const bodyRef = useRef();
   const leftWingRef = useRef();
   const rightWingRef = useRef();
@@ -1570,6 +1793,7 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
   const paperTextures = useMemo(() => createPaperTextures(), []);
   const data = useMemo(() => createCraneData(count, reducedMotion), [count, reducedMotion]);
   const color = useMemo(() => new THREE.Color(), []);
+  const nightVisibility = skyStyle?.craneNightLift ?? 0;
   const paperMaterialProps = useMemo(
     () => ({
       map: paperTextures?.map,
@@ -1580,12 +1804,12 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
       side: THREE.DoubleSide,
       roughness: 1,
       metalness: 0,
-      emissive: '#0d0708',
-      emissiveIntensity: 0.032,
+      emissive: nightVisibility > 0.02 ? '#f1f7ff' : '#0d0708',
+      emissiveIntensity: 0.032 + nightVisibility * 0.052,
       envMapIntensity: 0.18,
       dithering: true,
     }),
-    [paperTextures],
+    [nightVisibility, paperTextures],
   );
 
   useLayoutEffect(() => {
@@ -2915,19 +3139,105 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
 }
 
 function SkyBackdrop({ skyStyle }) {
-  const texture = useMemo(() => createSkyTexture(skyStyle), [skyStyle]);
-
-  useEffect(
-    () => () => {
-      texture?.dispose();
-    },
-    [texture],
+  const materialRef = useRef();
+  const uniforms = useMemo(
+    () => ({
+      uTop: { value: new THREE.Color(skyStyle.top) },
+      uMiddle: { value: new THREE.Color(skyStyle.middle) },
+      uHorizon: { value: new THREE.Color(skyStyle.horizon) },
+      uSunColor: { value: new THREE.Color(skyStyle.sun) },
+      uMoonColor: { value: new THREE.Color('#dbe8ff') },
+      uSunPosition: { value: new THREE.Vector2(skyStyle.sunPosition.x, skyStyle.sunPosition.y) },
+      uMoonPosition: { value: new THREE.Vector2(skyStyle.moonPosition.x, skyStyle.moonPosition.y) },
+      uSunVisibility: { value: skyStyle.sunVisibility },
+      uMoonVisibility: { value: skyStyle.moonVisibility },
+      uNight: { value: skyStyle.night },
+      uTwilight: { value: skyStyle.twilight },
+    }),
+    [],
   );
+
+  useFrame(() => {
+    const material = materialRef.current;
+    if (!material) return;
+
+    material.uniforms.uTop.value.set(skyStyle.top);
+    material.uniforms.uMiddle.value.set(skyStyle.middle);
+    material.uniforms.uHorizon.value.set(skyStyle.horizon);
+    material.uniforms.uSunColor.value.set(skyStyle.sun);
+    material.uniforms.uSunPosition.value.set(skyStyle.sunPosition.x, skyStyle.sunPosition.y);
+    material.uniforms.uMoonPosition.value.set(skyStyle.moonPosition.x, skyStyle.moonPosition.y);
+    material.uniforms.uSunVisibility.value = skyStyle.sunVisibility;
+    material.uniforms.uMoonVisibility.value = skyStyle.moonVisibility;
+    material.uniforms.uNight.value = skyStyle.night;
+    material.uniforms.uTwilight.value = skyStyle.twilight;
+  });
 
   return (
     <mesh position={[0, 0, FAR_Z + 18]} renderOrder={-100} raycast={nullRaycast}>
       <planeGeometry args={[520, 330]} />
-      <meshBasicMaterial map={texture} depthWrite={false} depthTest={false} toneMapped={false} fog={false} />
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={uniforms}
+        depthWrite={false}
+        depthTest={false}
+        toneMapped={false}
+        fog={false}
+        vertexShader={`
+          varying vec2 vUv;
+
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `}
+        fragmentShader={`
+          uniform vec3 uTop;
+          uniform vec3 uMiddle;
+          uniform vec3 uHorizon;
+          uniform vec3 uSunColor;
+          uniform vec3 uMoonColor;
+          uniform vec2 uSunPosition;
+          uniform vec2 uMoonPosition;
+          uniform float uSunVisibility;
+          uniform float uMoonVisibility;
+          uniform float uNight;
+          uniform float uTwilight;
+          varying vec2 vUv;
+
+          float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+          }
+
+          void main() {
+            float y = clamp(vUv.y, 0.0, 1.0);
+            vec3 lower = mix(uHorizon, uMiddle, smoothstep(0.0, 0.56, y));
+            vec3 upper = mix(uMiddle, uTop, smoothstep(0.42, 1.0, y));
+            vec3 color = mix(lower, upper, smoothstep(0.24, 0.82, y));
+
+            vec2 sky = vec2((vUv.x - 0.5) * 2.0, (vUv.y - 0.5) * 2.0);
+            vec2 sunUv = vec2(uSunPosition.x * 0.72, uSunPosition.y * 0.84);
+            float sunGlow = 1.0 - smoothstep(0.0, 0.62, distance(sky, sunUv));
+            color += uSunColor * sunGlow * uSunVisibility * 0.28;
+
+            vec2 moonUv = vec2(uMoonPosition.x * 0.7, uMoonPosition.y * 0.84);
+            float moonGlow = 1.0 - smoothstep(0.0, 0.48, distance(sky, moonUv));
+            color += uMoonColor * moonGlow * uMoonVisibility * 0.18;
+
+            float warmHaze = smoothstep(0.0, 0.46, 1.0 - y) * (0.08 * (1.0 - uNight) + uTwilight * 0.07);
+            float coolHaze = smoothstep(0.0, 0.55, 1.0 - y) * uNight * 0.06;
+            color = mix(color, vec3(1.0, 0.88, 0.67), warmHaze);
+            color = mix(color, vec3(0.34, 0.48, 0.72), coolHaze);
+
+            float vignette = smoothstep(0.62, 1.18, distance(vUv, vec2(0.5, 0.52)));
+            color = mix(color, vec3(0.015, 0.055, 0.13), vignette * (0.12 + uNight * 0.16));
+
+            float noise = hash(gl_FragCoord.xy) - 0.5;
+            color += noise * 0.0045;
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `}
+      />
     </mesh>
   );
 }
@@ -3639,6 +3949,7 @@ function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky })
       <directionalLight position={[-7, 2, -12]} intensity={skyStyle.rimIntensity} color={skyStyle.rim} />
       <pointLight position={[-9, -3, 12]} intensity={0.55 + (1 - skyStyle.night) * 0.55} color="#ffffff" distance={46} />
       <pointLight position={[10, 7, -24]} intensity={0.42 + skyStyle.moonVisibility * 0.5} color={skyStyle.rim} distance={76} />
+      <pointLight position={[0, -2, CAMERA_Z - 5]} intensity={skyStyle.craneNightLift * 0.34} color="#f1f7ff" distance={54} />
 
       <CameraRig interactionRef={interactionRef} reducedMotion={tier.reducedMotion} />
       <SkyBackdrop skyStyle={skyStyle} />
@@ -3656,6 +3967,7 @@ function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky })
         depositRef={depositRef}
         pickingRef={pickingRef}
         onDeposit={onDeposit}
+        skyStyle={skyStyle}
       />
       <BurstEcho interactionRef={interactionRef} />
     </>
@@ -3664,13 +3976,217 @@ function Scene({ tier, interactionRef, depositRef, pickingRef, onDeposit, sky })
 
 function ClockDisplay({ clock }) {
   return (
-    <div className="gmt-clock" aria-label="Date and time in GMT plus seven">
+    <div
+      className={`gmt-clock ${clock.isRealClock ? '' : 'is-simulated'}`}
+      aria-label={clock.isRealClock ? 'Date and time in GMT plus seven' : 'Simulated sky time in GMT plus seven'}
+    >
       <span className="clock-zone">GMT+7</span>
-      <time dateTime={`${clock.dateLabel} ${clock.timeLabel}`}>
+      <time dateTime={clock.isRealClock ? `${clock.dateLabel} ${clock.timeLabel}` : clock.timeLabel}>
         <span>{clock.timeLabel}</span>
-        <span>{clock.dateLabel}</span>
+        {clock.isRealClock ? <span>{clock.dateLabel}</span> : <span>Celestial time</span>}
       </time>
     </div>
+  );
+}
+
+function CelestialDial({ clock }) {
+  const dialRef = useRef(null);
+  const draggingRef = useRef(false);
+  const dragStartAngleRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
+  const dragAngleRef = useRef(0);
+  const accumulatedDragAngleRef = useRef(0);
+  const offsetRef = useRef(0);
+  const offsetMinutes = clock.selectedOffsetMinutes;
+  offsetRef.current = offsetMinutes;
+  const isAnimating = clock.mode === TIME_MODE_ANIMATING;
+  const dialOffsetMinutes = isAnimating ? clock.dialOffsetMinutes : offsetMinutes;
+  const hourAngle = ((dialOffsetMinutes % 720) / 720) * TAU;
+  const targetMinutes = clock.selectedTargetMinutes;
+  const minuteAngle = ((targetMinutes % 60) / 60) * TAU;
+  const center = 120;
+  const hourRadius = 72;
+  const minuteRadius = 49;
+  const handX = center + Math.sin(hourAngle) * hourRadius;
+  const handY = center - Math.cos(hourAngle) * hourRadius;
+  const minuteX = center + Math.sin(minuteAngle) * minuteRadius;
+  const minuteY = center - Math.cos(minuteAngle) * minuteRadius;
+
+  const getPointerAngle = useCallback((event) => {
+    const rect = dialRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const dx = x - rect.width / 2;
+    const dy = y - rect.height / 2;
+    return (Math.atan2(dx, -dy) + TAU) % TAU;
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      draggingRef.current = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      const angle = getPointerAngle(event) ?? hourAngle;
+      dragStartAngleRef.current = angle;
+      dragAngleRef.current = angle;
+      dragStartOffsetRef.current = offsetRef.current;
+      accumulatedDragAngleRef.current = 0;
+    },
+    [getPointerAngle, hourAngle],
+  );
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      if (!draggingRef.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const angle = getPointerAngle(event);
+      if (angle == null) return;
+
+      let signedDelta = angle - dragAngleRef.current;
+      if (signedDelta > Math.PI) signedDelta -= TAU;
+      if (signedDelta < -Math.PI) signedDelta += TAU;
+      dragAngleRef.current = angle;
+      accumulatedDragAngleRef.current += signedDelta;
+      const rawOffset = dragStartOffsetRef.current + (accumulatedDragAngleRef.current / TAU) * 720;
+      const nextOffset = snapOffsetMinutes(rawOffset);
+      accumulatedDragAngleRef.current = ((nextOffset - dragStartOffsetRef.current) / 720) * TAU;
+      offsetRef.current = nextOffset;
+      clock.setSelectedOffsetMinutes(nextOffset);
+    },
+    [clock, getPointerAngle],
+  );
+
+  const stopDragging = useCallback((event) => {
+    draggingRef.current = false;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        clock.setSelectedOffsetMinutes(offsetMinutes + (event.shiftKey ? 60 : 5));
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        clock.setSelectedOffsetMinutes(offsetMinutes - (event.shiftKey ? 60 : 5));
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        clock.confirmSelection();
+      }
+    },
+    [clock, offsetMinutes],
+  );
+
+  const targetSky = clock.targetSkyStyle;
+  const dialStyle = {
+    '--dial-sky-top': targetSky.top,
+    '--dial-sky-middle': targetSky.middle,
+    '--dial-sky-horizon': targetSky.horizon,
+  };
+
+  return (
+    <section className="celestial-panel" aria-label="Celestial Dial">
+      <div className="celestial-copy">
+        <p className="sidebar-kicker">Celestial Dial</p>
+        <h3>Turn the sky forward</h3>
+        <p>Choose the next hour you want the cranes to fly beneath.</p>
+      </div>
+
+      <div
+        ref={dialRef}
+        className={`celestial-dial ${isAnimating ? 'is-animating' : ''}`}
+        style={dialStyle}
+        role="slider"
+        aria-label="Advance celestial time"
+        aria-valuemin={0}
+        aria-valuemax={1440}
+        aria-valuenow={offsetMinutes}
+        aria-valuetext={`${clock.targetOffsetLabel}, ${clock.selectedTimeLabel} ${clock.targetDayLabel}`}
+        tabIndex={0}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={stopDragging}
+        onPointerCancel={stopDragging}
+        onKeyDown={handleKeyDown}
+      >
+        <svg viewBox="0 0 240 240" aria-hidden="true">
+          <defs>
+            <radialGradient id="dialFace" cx="50%" cy="48%" r="58%">
+              <stop offset="0%" stopColor="#fff7df" />
+              <stop offset="62%" stopColor="#ead8ac" />
+              <stop offset="100%" stopColor="#b9854a" />
+            </radialGradient>
+            <linearGradient id="dayArc" x1="0%" x2="100%">
+              <stop offset="0%" stopColor="#d59a56" />
+              <stop offset="52%" stopColor="#f9df8f" />
+              <stop offset="100%" stopColor="#d48b74" />
+            </linearGradient>
+            <linearGradient id="nightArc" x1="0%" x2="100%">
+              <stop offset="0%" stopColor="#42577b" />
+              <stop offset="50%" stopColor="#16243f" />
+              <stop offset="100%" stopColor="#42577b" />
+            </linearGradient>
+            <linearGradient id="selectedSkyArc" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={targetSky.top} />
+              <stop offset="52%" stopColor={targetSky.middle} />
+              <stop offset="100%" stopColor={targetSky.horizon} />
+            </linearGradient>
+          </defs>
+          <circle cx="120" cy="120" r="106" fill="url(#dialFace)" />
+          <circle cx="120" cy="120" r="108" fill="none" stroke="url(#selectedSkyArc)" strokeWidth="7" opacity="0.86" />
+          <circle cx="120" cy="120" r="102" fill="none" stroke="#7f5b35" strokeWidth="2" opacity="0.65" />
+          <path d="M 23 120 A 97 97 0 0 1 217 120" fill="none" stroke="url(#dayArc)" strokeWidth="9" strokeLinecap="round" />
+          <path d="M 217 120 A 97 97 0 0 1 23 120" fill="none" stroke="url(#nightArc)" strokeWidth="9" strokeLinecap="round" />
+          {Array.from({ length: 12 }, (_, index) => {
+            const angle = (index / 12) * TAU;
+            const major = index % 3 === 0;
+            const outer = 93;
+            const inner = major ? 78 : 84;
+            const x1 = 120 + Math.sin(angle) * inner;
+            const y1 = 120 - Math.cos(angle) * inner;
+            const x2 = 120 + Math.sin(angle) * outer;
+            const y2 = 120 - Math.cos(angle) * outer;
+            const labelR = 67;
+            const lx = 120 + Math.sin(angle) * labelR;
+            const ly = 120 - Math.cos(angle) * labelR + 4;
+            return (
+              <g key={index}>
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#67462c" strokeWidth={major ? 2.6 : 1.2} opacity={major ? 0.78 : 0.42} />
+                {major ? (
+                  <text x={lx} y={ly} textAnchor="middle" fontSize="10" fill="#533720">
+                    {index === 0 ? '12' : index}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+          <circle cx="120" cy="120" r="52" fill="rgba(255,248,220,0.42)" stroke="rgba(101,70,43,0.32)" />
+          <line x1="120" y1="120" x2={minuteX} y2={minuteY} stroke="#8a6040" strokeWidth="2.3" strokeLinecap="round" opacity="0.72" />
+          <line x1="120" y1="120" x2={handX} y2={handY} stroke="#3f2b1d" strokeWidth="4.8" strokeLinecap="round" />
+          <circle cx={handX} cy={handY} r="6.4" fill="#fff5cc" stroke="#6f4d2d" strokeWidth="2" />
+          <circle cx="120" cy="120" r="8" fill="#725033" stroke="#f4d99f" strokeWidth="2" />
+        </svg>
+      </div>
+
+      <div className="celestial-readout">
+        <span>{clock.selectedTimeLabel}</span>
+        <strong>{clock.targetDayLabel}</strong>
+        <em>{clock.targetOffsetLabel}</em>
+      </div>
+
+      <div className="celestial-actions">
+        <button type="button" onClick={clock.confirmSelection} disabled={isAnimating}>
+          {isAnimating ? 'Turning...' : 'Confirm'}
+        </button>
+        <button type="button" onClick={clock.returnToRealTime}>
+          Return to Real Time
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -3710,17 +4226,24 @@ function PaperNote({ note, onClose }) {
   );
 }
 
-function HistorySidebar({ open, history, onClose, onClear }) {
+function WishSidebar({ open, history, onClose, onClear, clock, activePanel, onPanelChange }) {
   useEffect(() => {
     if (!open) return undefined;
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        clock.cancelSelecting();
+        onClose();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [clock, onClose, open]);
+
+  useEffect(() => {
+    if (!open) clock.cancelSelecting();
+  }, [clock.cancelSelecting, open]);
 
   const groups = useMemo(
     () =>
@@ -3736,46 +4259,90 @@ function HistorySidebar({ open, history, onClose, onClear }) {
       <div
         className={`sidebar-scrim ${open ? 'is-open' : ''}`}
         aria-hidden="true"
-        onPointerDown={onClose}
+        onPointerDown={() => {
+          clock.cancelSelecting();
+          onClose();
+        }}
       />
       <aside className={`history-sidebar ${open ? 'is-open' : ''}`} aria-hidden={!open}>
         <div className="sidebar-header">
           <div>
             <p className="sidebar-kicker">Wish vessel</p>
-            <h2>History</h2>
+            <h2>{activePanel === 'dial' ? 'Celestial Dial' : 'History'}</h2>
           </div>
-          <button className="sidebar-close" type="button" aria-label="Close history" onClick={onClose}>
+          <button
+            className="sidebar-close"
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => {
+              clock.cancelSelecting();
+              onClose();
+            }}
+          >
             x
           </button>
         </div>
 
-        {history.length > 0 ? (
-          <button className="history-clear" type="button" onClick={onClear}>
-            Clear history
+        <div className="sidebar-tabs" role="tablist" aria-label="Wish vessel sidebar sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === 'history'}
+            className={activePanel === 'history' ? 'is-active' : ''}
+            onClick={() => {
+              clock.cancelSelecting();
+              onPanelChange('history');
+            }}
+          >
+            History
           </button>
-        ) : null}
-
-        <div className="history-groups">
-          {groups.map(({ config, items }) => (
-            <section className="history-group" key={config.key}>
-              <header>
-                <span className={`history-swatch swatch-${config.key}`} aria-hidden="true" />
-                <span>{config.label}</span>
-                <span>{items.length}</span>
-              </header>
-              {items.length > 0 ? (
-                items.map((entry) => (
-                  <article className="history-item" key={entry.id}>
-                    <p>{entry.message}</p>
-                    <time dateTime={entry.depositedAtISO}>{entry.depositedAtGMT7Display}</time>
-                  </article>
-                ))
-              ) : (
-                <p className="history-empty">No wishes yet.</p>
-              )}
-            </section>
-          ))}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activePanel === 'dial'}
+            className={activePanel === 'dial' ? 'is-active' : ''}
+            onClick={() => {
+              clock.beginSelecting();
+              onPanelChange('dial');
+            }}
+          >
+            Celestial Dial
+          </button>
         </div>
+
+        {activePanel === 'history' ? (
+          <>
+            {history.length > 0 ? (
+              <button className="history-clear" type="button" onClick={onClear}>
+                Clear history
+              </button>
+            ) : null}
+
+            <div className="history-groups">
+              {groups.map(({ config, items }) => (
+                <section className="history-group" key={config.key}>
+                  <header>
+                    <span className={`history-swatch swatch-${config.key}`} aria-hidden="true" />
+                    <span>{config.label}</span>
+                    <span>{items.length}</span>
+                  </header>
+                  {items.length > 0 ? (
+                    items.map((entry) => (
+                      <article className="history-item" key={entry.id}>
+                        <p>{entry.message}</p>
+                        <time dateTime={entry.depositedAtISO}>{entry.depositedAtGMT7Display}</time>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="history-empty">No wishes yet.</p>
+                  )}
+                </section>
+              ))}
+            </div>
+          </>
+        ) : (
+          <CelestialDial clock={clock} />
+        )}
       </aside>
     </>
   );
@@ -3783,7 +4350,7 @@ function HistorySidebar({ open, history, onClose, onClear }) {
 
 export default function App() {
   const tier = usePerformanceTier();
-  const clock = useGMT7Clock();
+  const clock = useCelestialTime(tier.reducedMotion);
   const depositRef = useRef({
     hovered: false,
     hoveredIndex: -1,
@@ -3815,6 +4382,7 @@ export default function App() {
   const [historyEntries, setHistoryEntries] = useState([]);
   const [activeNote, setActiveNote] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarPanel, setSidebarPanel] = useState('history');
   const pickingRef = useRef({
     pickCraneFromPointer: null,
   });
@@ -3987,9 +4555,12 @@ export default function App() {
       <button
         className="menu-button"
         type="button"
-        aria-label="Open wish history"
+        aria-label="Open wish vessel sidebar"
         aria-expanded={sidebarOpen}
-        onClick={() => setSidebarOpen(true)}
+        onClick={() => {
+          setSidebarPanel('history');
+          setSidebarOpen(true);
+        }}
       >
         <span />
         <span />
@@ -4001,11 +4572,14 @@ export default function App() {
         <h1>A Thousand Paper Cranes</h1>
         <p className="instruction">Move through the flock. Hold a crane and release it into the vessel.</p>
       </section>
-      <HistorySidebar
+      <WishSidebar
         open={sidebarOpen}
         history={historyEntries}
         onClose={() => setSidebarOpen(false)}
         onClear={clearHistory}
+        clock={clock}
+        activePanel={sidebarPanel}
+        onPanelChange={setSidebarPanel}
       />
       <PaperNote note={activeNote} onClose={closeNote} />
       <div className="vignette" aria-hidden="true" />
