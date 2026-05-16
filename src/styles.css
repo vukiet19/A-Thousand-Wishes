@@ -102,6 +102,17 @@ h1 {
     inset 0 -18vh 110px rgba(38, 70, 93, 0.2);
 }
 
+.experience.is-cinematic .menu-button,
+.experience.is-cinematic .gmt-clock,
+.experience.is-cinematic .title-layer,
+.experience.is-cinematic .history-sidebar,
+.experience.is-cinematic .sidebar-scrim,
+.experience.is-cinematic .note-backdrop,
+.experience.is-cinematic .vignette {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .menu-button,
 .sidebar-close,
 .note-close,

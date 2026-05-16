@@ -524,7 +524,7 @@ const isInteractionInDropZone = (interaction, vessel) => {
   return dx * dx + dy * dy <= 1;
 };
 
-function useCelestialTime(reducedMotion) {
+function useCelestialTime(reducedMotion, callbacks = {}) {
   const [now, setNow] = useState(() => new Date());
   const [mode, setMode] = useState(TIME_MODE_REAL);
   const [selectedOffsetMinutes, setSelectedOffsetMinutes] = useState(0);
@@ -543,7 +543,12 @@ function useCelestialTime(reducedMotion) {
     duration: 0,
   });
   const selectionBaseModeRef = useRef(TIME_MODE_REAL);
+  const callbacksRef = useRef(callbacks);
   const previewTimeHours = useMemo(() => getSkyPreviewTimeHours(), []);
+
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -625,6 +630,7 @@ function useCelestialTime(reducedMotion) {
     animationRef.current.targetMs = targetDate.getTime();
     animationRef.current.startedAt = performance.now();
     animationRef.current.duration = duration * 1000;
+    callbacksRef.current.onTimeTravelStart?.();
     setMode(TIME_MODE_ANIMATING);
 
     const tick = (timestamp) => {
@@ -647,6 +653,7 @@ function useCelestialTime(reducedMotion) {
       setAnimationDate(null);
       setSelectedOffsetMinutes(0);
       setMode(TIME_MODE_SIMULATED);
+      callbacksRef.current.onTimeTravelComplete?.();
     };
 
     animationRef.current.frame = window.requestAnimationFrame(tick);
@@ -708,7 +715,7 @@ function useCelestialTime(reducedMotion) {
       dateLabel: `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`,
       timeLabel: isRealClock
         ? `${pad2(parts.hours)}:${pad2(parts.minutes)}:${pad2(parts.seconds)}`
-        : `${pad2(displayParts.hours)}:${pad2(displayParts.minutes)}`,
+        : `${pad2(displayParts.hours)}:${pad2(displayParts.minutes)}:${pad2(displayParts.seconds)}`,
       beginSelecting,
       cancelSelecting,
       setSelectedOffsetMinutes: (minutes) => setSelectedOffsetMinutes(snapOffsetMinutes(minutes)),
@@ -1587,6 +1594,8 @@ function resetCrane(data, index, startSpread, reducedMotion) {
     random(hero ? 5.8 : mid ? 8.2 : 6.2, hero ? 8.8 : mid ? 14.0 : 10.6) * speedScale;
   data.size[index] = hero ? random(0.82, 1.08) : mid ? random(0.42, 0.72) : random(0.2, 0.38);
   data.phase[index] = random(0, TAU);
+  data.flapCycle[index] = random(0, 1);
+  data.speedMemory[index] = data.cruise[index];
   data.flapSpeed[index] =
     random(hero ? 0.92 : mid ? 1.12 : 0.82, hero ? 1.42 : mid ? 2.05 : 1.52) *
     (reducedMotion ? 0.58 : 1);
@@ -1681,6 +1690,8 @@ function createCraneData(count, reducedMotion) {
     cruise: new Float32Array(count),
     size: new Float32Array(count),
     phase: new Float32Array(count),
+    flapCycle: new Float32Array(count),
+    speedMemory: new Float32Array(count),
     flapSpeed: new Float32Array(count),
     roll: new Float32Array(count),
     homeAngle: new Float32Array(count),
@@ -2818,14 +2829,24 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
             ? reducedMotion
               ? 13.2
               : 22
-            : (hero ? 11.4 : mid ? 17.2 : 12.4) *
-              (1 + capExitT * (reducedMotion ? 0.12 : hero ? 0.42 : 0.28));
+            : data.exitState[i] === 0
+              ? data.cruise[i] * (hero ? 1.42 : mid ? 1.32 : 1.34)
+              : (hero ? 11.4 : mid ? 17.2 : 12.4) *
+                (1 + capExitT * (reducedMotion ? 0.12 : hero ? 0.42 : 0.28));
       const speed = Math.hypot(data.vx[i], data.vy[i], data.vz[i]);
       if (speed > maxSpeed) {
         const scale = maxSpeed / speed;
         data.vx[i] *= scale;
         data.vy[i] *= scale;
         data.vz[i] *= scale;
+      }
+      if (heldStatus === HOLD_NONE && data.exitState[i] === 0) {
+        const currentSpeed = Math.max(0.001, Math.hypot(data.vx[i], data.vy[i], data.vz[i]));
+        const targetSpeed = data.cruise[i] * (hero ? 1.0 : mid ? 0.98 : 0.94);
+        const speedCorrection = clamp(((targetSpeed - currentSpeed) / currentSpeed) * dt * 0.42, -0.012, 0.009);
+        data.vx[i] *= 1 + speedCorrection;
+        data.vy[i] *= 1 + speedCorrection;
+        data.vz[i] *= 1 + speedCorrection;
       }
       if (heldStatus === HOLD_NONE && data.vz[i] < data.cruise[i] * 0.52) {
         data.vz[i] += (data.cruise[i] * 0.52 - data.vz[i]) * 0.18;
@@ -2868,6 +2889,7 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
       }
 
       const speedAfter = Math.hypot(data.vx[i], data.vy[i], data.vz[i]);
+      data.speedMemory[i] += (speedAfter - data.speedMemory[i]) * (1 - Math.exp(-dt * 1.35));
       const yaw = Math.atan2(data.vx[i], data.vz[i]);
       const pitch = -Math.atan2(data.vy[i], Math.max(0.001, Math.hypot(data.vx[i], data.vz[i])));
       const exitT = capExitT;
@@ -2911,13 +2933,16 @@ function CraneField({ count, reducedMotion, interactionRef, depositRef, pickingR
 
       const phase = data.phase[i];
       const turbulence = Math.sin(elapsed * 0.62 + data.noise[i] + data.x[i] * 0.035) * 0.16;
+      const stableSpeed = clamp(data.speedMemory[i], data.cruise[i] * 0.62, data.cruise[i] * 1.38);
       const flapRate =
         data.flapSpeed[i] *
-        (0.7 + speedAfter * (hero ? 0.05 : 0.038) + Math.abs(data.roll[i]) * 0.16) *
+        (0.72 + stableSpeed * (hero ? 0.036 : 0.028) + Math.abs(data.roll[i]) * 0.13) *
         (1 - exitCommitVisual * (hero ? 0.16 : 0.07)) *
         (1 - holdVisual * (reducedMotion ? 0.18 : 0.3)) *
         (1 + motionVisual * (reducedMotion ? 0.16 : 0.72) * (0.25 + dragIntensity));
-      const wingCycle = elapsed * flapRate * (1 / TAU) + phase * (1 / TAU) + turbulence * 0.035;
+      const cycleRate = clamp(flapRate * (1 / TAU), reducedMotion ? 0.035 : 0.08, reducedMotion ? 0.24 : hero ? 0.34 : 0.42);
+      data.flapCycle[i] = wrap01(data.flapCycle[i] + cycleRate * dt);
+      const wingCycle = wrap01(data.flapCycle[i] + turbulence * 0.02);
       const wingPose = wingbeatCurve(wingCycle);
       const bodyPose = wingbeatCurve(wingCycle - (hero ? 0.055 : 0.04));
       const neckPose = wingbeatCurve(wingCycle - (hero ? 0.1 : 0.075));
@@ -4350,7 +4375,39 @@ function WishSidebar({ open, history, onClose, onClear, clock, activePanel, onPa
 
 export default function App() {
   const tier = usePerformanceTier();
-  const clock = useCelestialTime(tier.reducedMotion);
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [activeNote, setActiveNote] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarPanel, setSidebarPanel] = useState('history');
+  const [cinematicMode, setCinematicMode] = useState(false);
+  const timeTravelUiRef = useRef({
+    sidebarOpen: false,
+    sidebarPanel: 'history',
+    cinematicMode: false,
+  });
+  const handleTimeTravelStart = useCallback(() => {
+    timeTravelUiRef.current = {
+      sidebarOpen,
+      sidebarPanel,
+      cinematicMode,
+    };
+    setSidebarOpen(false);
+    setCinematicMode(true);
+  }, [cinematicMode, sidebarOpen, sidebarPanel]);
+  const handleTimeTravelComplete = useCallback(() => {
+    const previous = timeTravelUiRef.current;
+    setCinematicMode(previous.cinematicMode);
+    setSidebarPanel(previous.sidebarPanel);
+    setSidebarOpen(previous.sidebarOpen);
+  }, []);
+  const celestialCallbacks = useMemo(
+    () => ({
+      onTimeTravelStart: handleTimeTravelStart,
+      onTimeTravelComplete: handleTimeTravelComplete,
+    }),
+    [handleTimeTravelComplete, handleTimeTravelStart],
+  );
+  const clock = useCelestialTime(tier.reducedMotion, celestialCallbacks);
   const depositRef = useRef({
     hovered: false,
     hoveredIndex: -1,
@@ -4379,10 +4436,6 @@ export default function App() {
     worldRadiusZ: 1.2,
     scale: 1.7,
   });
-  const [historyEntries, setHistoryEntries] = useState([]);
-  const [activeNote, setActiveNote] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarPanel, setSidebarPanel] = useState('history');
   const pickingRef = useRef({
     pickCraneFromPointer: null,
   });
@@ -4525,7 +4578,10 @@ export default function App() {
   }, [releaseGrabInteraction, triggerBurst, updateInteraction]);
 
   return (
-    <main className="experience" aria-label="A Thousand Paper Cranes immersive 3D artwork">
+    <main
+      className={`experience ${cinematicMode ? 'is-cinematic' : ''}`}
+      aria-label="A Thousand Paper Cranes immersive 3D artwork"
+    >
       <Canvas
         className="flight-canvas"
         dpr={[1, tier.reducedMotion ? 1.12 : 1.55]}
